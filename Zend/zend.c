@@ -550,8 +550,9 @@ static zend_bool php_auto_globals_create_globals(zend_string *name) /* {{{ */
 	zval globals;
 
 	ZVAL_ARR(&globals, &EG(symbol_table));
+	Z_TYPE_INFO_P(&globals) = IS_ARRAY | (IS_TYPE_SYMBOLTABLE << Z_TYPE_FLAGS_SHIFT);
 	ZVAL_NEW_REF(&globals, &globals);
-	zend_hash_update(&EG(symbol_table).ht, name, &globals);
+	zend_hash_update(&EG(symbol_table), name, &globals);
 	return 0;
 }
 /* }}} */
@@ -957,7 +958,7 @@ ZEND_API zval *zend_get_configuration_directive(zend_string *name) /* {{{ */
 		} \
 	} while (0)
 
-#if !defined(ZEND_WIN32) && !defined(DARWIN)
+#if !defined(HAVE_NORETURN) || defined(HAVE_NORETURN_ALIAS)
 ZEND_API void zend_error(int type, const char *format, ...) /* {{{ */
 #else
 static void zend_error_va_list(int type, const char *format, va_list args)
@@ -965,7 +966,7 @@ static void zend_error_va_list(int type, const char *format, va_list args)
 {
 	char *str;
 	int len;
-#if !defined(ZEND_WIN32) && !defined(DARWIN)
+#if !defined(HAVE_NORETURN) || defined(HAVE_NORETURN_ALIAS)
 	va_list args;
 #endif
 	va_list usr_copy;
@@ -1059,17 +1060,21 @@ static void zend_error_va_list(int type, const char *format, va_list args)
 	}
 
 #ifdef HAVE_DTRACE
-	if(DTRACE_ERROR_ENABLED()) {
+	if (DTRACE_ERROR_ENABLED()) {
 		char *dtrace_error_buffer;
+#if !defined(HAVE_NORETURN) || defined(HAVE_NORETURN_ALIAS)
 		va_start(args, format);
+#endif
 		zend_vspprintf(&dtrace_error_buffer, 0, format, args);
 		DTRACE_ERROR(dtrace_error_buffer, (char *)error_filename, error_lineno);
 		efree(dtrace_error_buffer);
+#if !defined(HAVE_NORETURN) || defined(HAVE_NORETURN_ALIAS)
 		va_end(args);
+#endif
 	}
 #endif /* HAVE_DTRACE */
 
-#if !defined(ZEND_WIN32) && !defined(DARWIN)
+#if !defined(HAVE_NORETURN) || defined(HAVE_NORETURN_ALIAS)
 	va_start(args, format);
 #endif
 
@@ -1125,8 +1130,7 @@ static void zend_error_va_list(int type, const char *format, va_list args)
 			if (!symbol_table) {
 				ZVAL_NULL(&params[4]);
 			} else {
-				ZVAL_NEW_ARR(&params[4]);
-				zend_array_dup(Z_ARRVAL(params[4]), &symbol_table->ht);
+				ZVAL_ARR(&params[4], zend_array_dup(symbol_table));
 			}
 
 			ZVAL_COPY_VALUE(&orig_user_error_handler, &EG(user_error_handler));
@@ -1182,7 +1186,7 @@ static void zend_error_va_list(int type, const char *format, va_list args)
 			break;
 	}
 
-#if !defined(ZEND_WIN32) && !defined(DARWIN)
+#if !defined(HAVE_NORETURN) || defined(HAVE_NORETURN_ALIAS)
 	va_end(args);
 #endif
 
@@ -1199,9 +1203,10 @@ static void zend_error_va_list(int type, const char *format, va_list args)
 }
 /* }}} */
 
-#if (defined(__GNUC__) && __GNUC__ >= 3 && !defined(__INTEL_COMPILER) && !defined(DARWIN) && !defined(__hpux) && !defined(_AIX) && !defined(__osf__))
+#ifdef HAVE_NORETURN
+# ifdef HAVE_NORETURN_ALIAS
 void zend_error_noreturn(int type, const char *format, ...) __attribute__ ((alias("zend_error"),noreturn));
-#elif defined(ZEND_WIN32) || defined(DARWIN)
+# else
 ZEND_API void zend_error(int type, const char *format, ...) /* {{{ */
 {
 	va_list va;
@@ -1220,6 +1225,7 @@ ZEND_API ZEND_NORETURN void zend_error_noreturn(int type, const char *format, ..
 	va_end(va);
 }
 /* }}} */
+# endif
 #endif
 
 ZEND_API void zend_output_debug_string(zend_bool trigger_break, const char *format, ...) /* {{{ */

@@ -1173,6 +1173,11 @@ static zend_persistent_script *cache_script_in_shared_memory(zend_persistent_scr
 	/* Copy into shared memory */
 	new_persistent_script = zend_accel_script_persist(new_persistent_script, &key, key_length);
 
+	new_persistent_script->is_phar =
+		new_persistent_script->full_path &&
+		strstr(new_persistent_script->full_path->val, ".phar") &&
+		!strstr(new_persistent_script->full_path->val, "://");
+
 	/* Consistency check */
 	if ((char*)new_persistent_script->mem + new_persistent_script->size != (char*)ZCG(mem)) {
 		zend_accel_error(
@@ -1234,7 +1239,7 @@ static int zend_accel_get_auto_globals(void)
 	int mask = 0;
 
 	for (i = 0; i < ag_size ; i++) {
-		if (zend_hash_exists(&EG(symbol_table).ht, jit_auto_globals_str[i])) {
+		if (zend_hash_exists(&EG(symbol_table), jit_auto_globals_str[i])) {
 			mask |= n;
 		}
 		n += n;
@@ -1244,7 +1249,7 @@ static int zend_accel_get_auto_globals(void)
 
 static int zend_accel_get_auto_globals_no_jit(void)
 {
-	if (zend_hash_exists(&EG(symbol_table).ht, jit_auto_globals_str[3])) {
+	if (zend_hash_exists(&EG(symbol_table), jit_auto_globals_str[3])) {
 		return 8;
 	}
 	return 0;
@@ -1634,7 +1639,7 @@ zend_op_array *persistent_compile_file(zend_file_handle *file_handle, int type)
 			     EG(current_execute_data)->opline->extended_value != ZEND_REQUIRE_ONCE)) {
 				if (zend_hash_add_empty_element(&EG(included_files), persistent_script->full_path) != NULL) {
 					/* ext/phar has to load phar's metadata into memory */
-					if (strstr(persistent_script->full_path->val, ".phar") && !strstr(persistent_script->full_path->val, "://")) {
+					if (persistent_script->is_phar) {
 						php_stream_statbuf ssb;
 						char *fname = emalloc(sizeof("phar://") + persistent_script->full_path->len);
 
@@ -1997,21 +2002,21 @@ static inline void zend_accel_fast_del_bucket(HashTable *ht, uint32_t idx, Bucke
 static void zend_accel_fast_shutdown(void)
 {
 	if (EG(full_tables_cleanup)) {
-		EG(symbol_table).ht.pDestructor = accel_fast_zval_dtor;
+		EG(symbol_table).pDestructor = accel_fast_zval_dtor;
 	} else {
 		dtor_func_t old_destructor;
 
 		if (EG(objects_store).top > 1 || zend_hash_num_elements(&EG(regular_list)) > 0) {
 			/* We don't have to destroy all zvals if they cannot call any destructors */
 
-		    old_destructor = EG(symbol_table).ht.pDestructor;
-			EG(symbol_table).ht.pDestructor = accel_fast_zval_dtor;
+		    old_destructor = EG(symbol_table).pDestructor;
+			EG(symbol_table).pDestructor = accel_fast_zval_dtor;
 			zend_try {
-				zend_hash_graceful_reverse_destroy(&EG(symbol_table).ht);
+				zend_hash_graceful_reverse_destroy(&EG(symbol_table));
 			} zend_end_try();
-			EG(symbol_table).ht.pDestructor = old_destructor;
+			EG(symbol_table).pDestructor = old_destructor;
 		}
-		zend_hash_init(&EG(symbol_table).ht, 8, NULL, NULL, 0);
+		zend_hash_init(&EG(symbol_table), 8, NULL, NULL, 0);
 
 		ZEND_HASH_REVERSE_FOREACH(EG(function_table), 0) {
 			zend_function *func = Z_PTR(_p->val);
