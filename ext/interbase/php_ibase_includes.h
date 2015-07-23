@@ -134,7 +134,7 @@ enum php_interbase_option {
 #ifdef ZTS
 # define IBG(v) ZEND_TSRMG(ibase_globals_id, zend_ibase_globals *, v)
 # ifdef COMPILE_DL_INTERBASE
-ZEND_TSRMLS_CACHE_EXTERN;
+ZEND_TSRMLS_CACHE_EXTERN();
 # endif
 #else
 #define IBG(v) (ibase_globals.v)
@@ -180,7 +180,7 @@ void php_ibase_query_minit(INIT_FUNC_ARGS);
 /* provided by ibase_blobs.c */
 void php_ibase_blobs_minit(INIT_FUNC_ARGS);
 int _php_ibase_string_to_quad(char const *id, ISC_QUAD *qd);
-char *_php_ibase_quad_to_string(ISC_QUAD const qd);
+zend_string *_php_ibase_quad_to_string(ISC_QUAD const qd);
 int _php_ibase_blob_get(zval *return_value, ibase_blob *ib_blob, unsigned long max_len);
 int _php_ibase_blob_add(zval *string_arg, ibase_blob *ib_blob);
 

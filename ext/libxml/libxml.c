@@ -80,7 +80,7 @@ static zend_class_entry *libxmlerror_class_entry;
 /* {{{ dynamically loadable module stuff */
 #ifdef COMPILE_DL_LIBXML
 #ifdef ZTS
-ZEND_TSRMLS_CACHE_DEFINE;
+ZEND_TSRMLS_CACHE_DEFINE();
 #endif
 ZEND_GET_MODULE(libxml)
 #endif /* COMPILE_DL_LIBXML */
@@ -144,7 +144,7 @@ zend_module_entry libxml_module_entry = {
 	PHP_RINIT(libxml),       /* per-request startup function */
 	PHP_RSHUTDOWN(libxml),   /* per-request shutdown function */
 	PHP_MINFO(libxml),       /* information function */
-	NO_VERSION_YET,
+	PHP_LIBXML_VERSION,
 	PHP_MODULE_GLOBALS(libxml), /* globals descriptor */
 	PHP_GINIT(libxml),          /* globals ctor */
 	NULL,                       /* globals dtor */
@@ -272,7 +272,7 @@ static void php_libxml_node_free_list(xmlNodePtr node)
 static PHP_GINIT_FUNCTION(libxml)
 {
 #if defined(COMPILE_DL_LIBXML) && defined(ZTS)
-	ZEND_TSRMLS_CACHE_UPDATE;
+	ZEND_TSRMLS_CACHE_UPDATE();
 #endif
 	ZVAL_UNDEF(&libxml_globals->stream_context);
 	libxml_globals->error_buffer.s = NULL;
@@ -314,6 +314,21 @@ static void *php_libxml_streams_IO_open_wrapper(const char *filename, const char
 			(xmlStrncmp(BAD_CAST uri->scheme, BAD_CAST "file", 4) == 0))) {
 		resolved_path = xmlURIUnescapeString(filename, 0, NULL);
 		isescaped = 1;
+#if LIBXML_VERSION >= 20902 && defined(PHP_WIN32)
+		/* Libxml 2.9.2 prefixes local paths with file:/ instead of file://,
+			thus the php stream wrapper will fail on a valid case. For this
+			reason the prefix is rather better cut off. */
+		{
+			size_t pre_len = sizeof("file:/") - 1;
+
+			if (strncasecmp(resolved_path, "file:/", pre_len) == 0
+				&& '/' != resolved_path[pre_len]) {
+				xmlChar *tmp = xmlStrdup(resolved_path + pre_len);
+				xmlFree(resolved_path);
+				resolved_path = tmp;
+			}
+		}
+#endif
 	} else {
 		resolved_path = (char *)filename;
 	}
@@ -536,17 +551,17 @@ static void php_libxml_internal_error_handler(int error_type, void *ctx, const c
 
 	if (output == 1) {
 		if (LIBXML(error_list)) {
-			_php_list_set_error_structure(NULL, LIBXML(error_buffer).s->val);
+			_php_list_set_error_structure(NULL, ZSTR_VAL(LIBXML(error_buffer).s));
 		} else {
 			switch (error_type) {
 				case PHP_LIBXML_CTX_ERROR:
-					php_libxml_ctx_error_level(E_WARNING, ctx, LIBXML(error_buffer).s->val);
+					php_libxml_ctx_error_level(E_WARNING, ctx, ZSTR_VAL(LIBXML(error_buffer).s));
 					break;
 				case PHP_LIBXML_CTX_WARNING:
-					php_libxml_ctx_error_level(E_NOTICE, ctx, LIBXML(error_buffer).s->val);
+					php_libxml_ctx_error_level(E_NOTICE, ctx, ZSTR_VAL(LIBXML(error_buffer).s));
 					break;
 				default:
-					php_error_docref(NULL, E_WARNING, "%s", LIBXML(error_buffer).s->val);
+					php_error_docref(NULL, E_WARNING, "%s", ZSTR_VAL(LIBXML(error_buffer).s));
 			}
 		}
 		smart_str_free(&LIBXML(error_buffer));
@@ -752,7 +767,7 @@ PHP_LIBXML_API void php_libxml_shutdown(void)
 #if defined(LIBXML_SCHEMAS_ENABLED)
 		xmlRelaxNGCleanupTypes();
 #endif
-		xmlCleanupParser();
+		/* xmlCleanupParser(); */
 		zend_hash_destroy(&php_libxml_exports);
 
 		xmlSetExternalEntityLoader(_php_libxml_default_entity_loader);
@@ -799,6 +814,9 @@ static PHP_MINIT_FUNCTION(libxml)
 #endif
 #if LIBXML_VERSION >= 20703
 	REGISTER_LONG_CONSTANT("LIBXML_PARSEHUGE",	XML_PARSE_HUGE,			CONST_CS | CONST_PERSISTENT);
+#endif
+#if LIBXML_VERSION >= 20900
+	REGISTER_LONG_CONSTANT("LIBXML_BIGLINES",	XML_PARSE_BIG_LINES,	CONST_CS | CONST_PERSISTENT);
 #endif
 	REGISTER_LONG_CONSTANT("LIBXML_NOEMPTYTAG",	LIBXML_SAVE_NOEMPTYTAG,	CONST_CS | CONST_PERSISTENT);
 
@@ -1326,7 +1344,7 @@ PHP_LIBXML_API void php_libxml_node_decrement_resource(php_libxml_node_object *o
 }
 /* }}} */
 
-#ifdef PHP_WIN32
+#if defined(PHP_WIN32) && defined(COMPILE_DL_LIBXML)
 PHP_LIBXML_API BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 {
 	return xmlDllMain(hinstDLL, fdwReason, lpvReserved);

@@ -22,7 +22,7 @@
 #ifndef PHP_JSON_H
 #define PHP_JSON_H
 
-#define PHP_JSON_VERSION "1.2.1"
+#define PHP_JSON_VERSION "1.4.0"
 #include "zend_smart_str_public.h"
 
 extern zend_module_entry json_module_entry;
@@ -51,6 +51,7 @@ typedef enum {
 	PHP_JSON_ERROR_RECURSION,
 	PHP_JSON_ERROR_INF_OR_NAN,
 	PHP_JSON_ERROR_UNSUPPORTED_TYPE,
+	PHP_JSON_ERROR_INVALID_PROPERTY_NAME,
 	PHP_JSON_ERROR_UTF16
 } php_json_error_code;
 

@@ -91,7 +91,7 @@ typedef struct _handler_entry {
 
 typedef struct _zend_shared_memory_state {
 	int *positions;   /* current positions for each segment */
-	int  shared_free; /* amount of free shared memory */
+	size_t shared_free; /* amount of free shared memory */
 } zend_shared_memory_state;
 
 typedef struct _zend_smm_shared_globals {
@@ -148,6 +148,8 @@ void zend_shared_alloc_unlock(void); /* returns the allocated size during lock..
 void zend_shared_alloc_safe_unlock(void);
 
 /* old/new mapping functions */
+void zend_shared_alloc_init_xlat_table(void);
+void zend_shared_alloc_destroy_xlat_table(void);
 void zend_shared_alloc_clear_xlat_table(void);
 void zend_shared_alloc_register_xlat_entry(const void *old, const void *new);
 void *zend_shared_alloc_get_xlat_entry(const void *old);

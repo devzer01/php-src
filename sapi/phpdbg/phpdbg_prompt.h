@@ -1,6 +1,6 @@
 /*
    +----------------------------------------------------------------------+
-   | PHP Version 5                                                        |
+   | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
    | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
@@ -57,6 +57,7 @@ PHPDBG_COMMAND(export);
 PHPDBG_COMMAND(register);
 PHPDBG_COMMAND(quit);
 PHPDBG_COMMAND(watch);
+PHPDBG_COMMAND(next);
 PHPDBG_COMMAND(eol);
 PHPDBG_COMMAND(wait); /* }}} */
 

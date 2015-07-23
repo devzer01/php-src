@@ -1,6 +1,6 @@
 /*
    +----------------------------------------------------------------------+
-   | PHP Version 5                                                        |
+   | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
    | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
@@ -99,7 +99,7 @@ PHPDBG_API char* phpdbg_param_tostring(const phpdbg_param_t *param, char **point
 		break;
 
 		case ADDR_PARAM:
-			asprintf(pointer, "%#llx", param->addr);
+			asprintf(pointer, ZEND_ULONG_FMT, param->addr);
 		break;
 
 		case NUMERIC_PARAM:
@@ -329,7 +329,7 @@ PHPDBG_API void phpdbg_param_debug(const phpdbg_param_t *param, const char *msg)
 			break;
 
 			case ADDR_PARAM:
-				fprintf(stderr, "%s ADDR_PARAM(%llu)\n", msg, param->addr);
+				fprintf(stderr, "%s ADDR_PARAM(" ZEND_ULONG_FMT ")\n", msg, param->addr);
 			break;
 
 			case NUMERIC_FILE_PARAM:
@@ -716,8 +716,7 @@ PHPDBG_API char *phpdbg_read_input(char *buffered) /* {{{ */
 #define USE_LIB_STAR (defined(HAVE_LIBREADLINE) || defined(HAVE_LIBEDIT))
 			/* note: EOF makes readline write prompt again in local console mode - and ignored if compiled without readline */
 #if USE_LIB_STAR
-readline:
-			if (PHPDBG_G(flags) & PHPDBG_IS_REMOTE)
+			if ((PHPDBG_G(flags) & PHPDBG_IS_REMOTE) || !isatty(PHPDBG_G(io)[PHPDBG_STDIN].fd))
 #endif
 			{
 				phpdbg_write("prompt", "", "%s", phpdbg_get_prompt());
@@ -727,13 +726,12 @@ readline:
 			else {
 				cmd = readline(phpdbg_get_prompt());
 				PHPDBG_G(last_was_newline) = 1;
-			}
 
-			if (!cmd) {
-				goto readline;
-			}
+				if (!cmd) {
+					PHPDBG_G(flags) |= PHPDBG_IS_QUITTING | PHPDBG_IS_DISCONNECTED;
+					zend_bailout();
+				}
 
-			if (!(PHPDBG_G(flags) & PHPDBG_IS_REMOTE)) {
 				add_history(cmd);
 			}
 #endif
@@ -744,7 +742,7 @@ readline:
 		buffer = estrdup(cmd);
 
 #if USE_LIB_STAR
-		if (!buffered && cmd &&	!(PHPDBG_G(flags) & PHPDBG_IS_REMOTE)) {
+		if (!buffered && cmd &&	!(PHPDBG_G(flags) & PHPDBG_IS_REMOTE) && isatty(PHPDBG_G(io)[PHPDBG_STDIN].fd)) {
 			free(cmd);
 		}
 #endif

@@ -81,7 +81,7 @@ static int php_output_handler_devnull_func(void **handler_context, php_output_co
  * Initialize the module globals on MINIT */
 static inline void php_output_init_globals(zend_output_globals *G)
 {
-	ZEND_TSRMLS_CACHE_UPDATE;
+	ZEND_TSRMLS_CACHE_UPDATE();
 	memset(G, 0, sizeof(*G));
 }
 /* }}} */
@@ -110,7 +110,7 @@ static void php_output_header(void)
 	if (!SG(headers_sent)) {
 		if (!OG(output_start_filename)) {
 			if (zend_is_compiling()) {
-				OG(output_start_filename) = zend_get_compiled_filename()->val;
+				OG(output_start_filename) = ZSTR_VAL(zend_get_compiled_filename());
 				OG(output_start_lineno) = zend_get_compiled_lineno();
 			} else if (zend_is_executing()) {
 				OG(output_start_filename) = zend_get_executed_filename();
@@ -179,21 +179,22 @@ PHPAPI void php_output_deactivate(void)
 {
 	php_output_handler **handler = NULL;
 
-	php_output_header();
+	if ((OG(flags) & PHP_OUTPUT_ACTIVATED)) {
+		php_output_header();
 
-	OG(flags) ^= PHP_OUTPUT_ACTIVATED;
-	OG(active) = NULL;
-	OG(running) = NULL;
+		OG(flags) ^= PHP_OUTPUT_ACTIVATED;
+		OG(active) = NULL;
+		OG(running) = NULL;
 
-	/* release all output handlers */
-	if (OG(handlers).elements) {
-		while ((handler = zend_stack_top(&OG(handlers)))) {
-			php_output_handler_free(handler);
-			zend_stack_del_top(&OG(handlers));
+		/* release all output handlers */
+		if (OG(handlers).elements) {
+			while ((handler = zend_stack_top(&OG(handlers)))) {
+				php_output_handler_free(handler);
+				zend_stack_del_top(&OG(handlers));
+			}
 		}
 		zend_stack_destroy(&OG(handlers));
 	}
-
 }
 /* }}} */
 
@@ -241,9 +242,6 @@ PHPAPI int php_output_get_status(void)
  * Unbuffered write */
 PHPAPI size_t php_output_write_unbuffered(const char *str, size_t len)
 {
-	if (OG(flags) & PHP_OUTPUT_DISABLED) {
-		return 0;
-	}
 	if (OG(flags) & PHP_OUTPUT_ACTIVATED) {
 		return sapi_module.ub_write(str, len);
 	}
@@ -255,12 +253,12 @@ PHPAPI size_t php_output_write_unbuffered(const char *str, size_t len)
  * Buffered write */
 PHPAPI size_t php_output_write(const char *str, size_t len)
 {
-	if (OG(flags) & PHP_OUTPUT_DISABLED) {
-		return 0;
-	}
 	if (OG(flags) & PHP_OUTPUT_ACTIVATED) {
 		php_output_op(PHP_OUTPUT_HANDLER_WRITE, str, len);
 		return len;
+	}
+	if (OG(flags) & PHP_OUTPUT_DISABLED) {
+		return 0;
 	}
 	return php_output_direct(str, len);
 }
@@ -552,13 +550,13 @@ PHPAPI int php_output_handler_start(php_output_handler *handler)
 		return FAILURE;
 	}
 	if (NULL != (conflict = zend_hash_find_ptr(&php_output_handler_conflicts, handler->name))) {
-		if (SUCCESS != conflict(handler->name->val, handler->name->len)) {
+		if (SUCCESS != conflict(ZSTR_VAL(handler->name), ZSTR_LEN(handler->name))) {
 			return FAILURE;
 		}
 	}
 	if (NULL != (rconflicts = zend_hash_find_ptr(&php_output_handler_reverse_conflicts, handler->name))) {
 		ZEND_HASH_FOREACH_PTR(rconflicts, conflict) {
-			if (SUCCESS != conflict(handler->name->val, handler->name->len)) {
+			if (SUCCESS != conflict(ZSTR_VAL(handler->name), ZSTR_LEN(handler->name))) {
 				return FAILURE;
 			}
 		} ZEND_HASH_FOREACH_END();
@@ -581,7 +579,7 @@ PHPAPI int php_output_handler_started(const char *name, size_t name_len)
 		handlers = (php_output_handler **) zend_stack_base(&OG(handlers));
 
 		for (i = 0; i < count; ++i) {
-			if (name_len == handlers[i]->name->len && !memcmp(handlers[i]->name->val, name, name_len)) {
+			if (name_len == ZSTR_LEN(handlers[i]->name) && !memcmp(ZSTR_VAL(handlers[i]->name), name, name_len)) {
 				return 1;
 			}
 		}
@@ -1205,7 +1203,7 @@ static inline int php_output_stack_pop(int flags)
 		return 0;
 	} else if (!(flags & PHP_OUTPUT_POP_FORCE) && !(orphan->flags & PHP_OUTPUT_HANDLER_REMOVABLE)) {
 		if (!(flags & PHP_OUTPUT_POP_SILENT)) {
-			php_error_docref("ref.outcontrol", E_NOTICE, "failed to %s buffer of %s (%d)", (flags&PHP_OUTPUT_POP_DISCARD)?"discard":"send", orphan->name->val, orphan->level);
+			php_error_docref("ref.outcontrol", E_NOTICE, "failed to %s buffer of %s (%d)", (flags&PHP_OUTPUT_POP_DISCARD)?"discard":"send", ZSTR_VAL(orphan->name), orphan->level);
 		}
 		return 0;
 	} else {
@@ -1332,7 +1330,7 @@ PHP_FUNCTION(ob_flush)
 	}
 
 	if (SUCCESS != php_output_flush()) {
-		php_error_docref("ref.outcontrol", E_NOTICE, "failed to flush buffer of %s (%d)", OG(active)->name->val, OG(active)->level);
+		php_error_docref("ref.outcontrol", E_NOTICE, "failed to flush buffer of %s (%d)", ZSTR_VAL(OG(active)->name), OG(active)->level);
 		RETURN_FALSE;
 	}
 	RETURN_TRUE;
@@ -1353,7 +1351,7 @@ PHP_FUNCTION(ob_clean)
 	}
 
 	if (SUCCESS != php_output_clean()) {
-		php_error_docref("ref.outcontrol", E_NOTICE, "failed to delete buffer of %s (%d)", OG(active)->name->val, OG(active)->level);
+		php_error_docref("ref.outcontrol", E_NOTICE, "failed to delete buffer of %s (%d)", ZSTR_VAL(OG(active)->name), OG(active)->level);
 		RETURN_FALSE;
 	}
 	RETURN_TRUE;
@@ -1408,7 +1406,7 @@ PHP_FUNCTION(ob_get_flush)
 	}
 
 	if (SUCCESS != php_output_end()) {
-		php_error_docref("ref.outcontrol", E_NOTICE, "failed to delete buffer of %s (%d)", OG(active)->name->val, OG(active)->level);
+		php_error_docref("ref.outcontrol", E_NOTICE, "failed to delete buffer of %s (%d)", ZSTR_VAL(OG(active)->name), OG(active)->level);
 	}
 }
 /* }}} */
@@ -1431,7 +1429,7 @@ PHP_FUNCTION(ob_get_clean)
 	}
 
 	if (SUCCESS != php_output_discard()) {
-		php_error_docref("ref.outcontrol", E_NOTICE, "failed to delete buffer of %s (%d)", OG(active)->name->val, OG(active)->level);
+		php_error_docref("ref.outcontrol", E_NOTICE, "failed to delete buffer of %s (%d)", ZSTR_VAL(OG(active)->name), OG(active)->level);
 	}
 }
 /* }}} */

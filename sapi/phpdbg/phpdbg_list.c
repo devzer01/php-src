@@ -1,6 +1,6 @@
 /*
    +----------------------------------------------------------------------+
-   | PHP Version 5                                                        |
+   | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
    | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
@@ -35,7 +35,7 @@
 ZEND_EXTERN_MODULE_GLOBALS(phpdbg);
 
 #define PHPDBG_LIST_COMMAND_D(f, h, a, m, l, s, flags) \
-	PHPDBG_COMMAND_D_EXP(f, h, a, m, l, s, &phpdbg_prompt_commands[13], flags)
+	PHPDBG_COMMAND_D_EXP(f, h, a, m, l, s, &phpdbg_prompt_commands[12], flags)
 
 const phpdbg_command_t phpdbg_list_commands[] = {
 	PHPDBG_LIST_COMMAND_D(lines,     "lists the specified lines",    'l', list_lines,  NULL, "l", PHPDBG_ASYNC_SAFE),
@@ -129,10 +129,10 @@ void phpdbg_list_file(zend_string *filename, uint count, int offset, uint highli
 	char resolved_path_buf[MAXPATHLEN];
 	const char *abspath;
 
-	if (VCWD_REALPATH(filename->val, resolved_path_buf)) {
+	if (VCWD_REALPATH(ZSTR_VAL(filename), resolved_path_buf)) {
 		abspath = resolved_path_buf;
 	} else {
-		abspath = filename->val;
+		abspath = ZSTR_VAL(filename);
 	}
 
 	if (!(data = zend_hash_str_find_ptr(&PHPDBG_G(file_sources), abspath, strlen(abspath)))) {
@@ -181,7 +181,7 @@ void phpdbg_list_function(const zend_function *fbc) /* {{{ */
 	const zend_op_array *ops;
 
 	if (fbc->type != ZEND_USER_FUNCTION) {
-		phpdbg_error("list", "type=\"internalfunction\" function=\"%s\"", "The function requested (%s) is not user defined", fbc->common.function_name);
+		phpdbg_error("list", "type=\"internalfunction\" function=\"%s\"", "The function requested (%s) is not user defined", ZSTR_VAL(fbc->common.function_name));
 		return;
 	}
 
@@ -235,12 +235,14 @@ zend_op_array *phpdbg_compile_file(zend_file_handle *file, int type) {
 	phpdbg_file_source data, *dataptr;
 	zend_file_handle fake = {{0}};
 	zend_op_array *ret;
-	char *filename = (char *)(file->opened_path ? file->opened_path : file->filename);
+	char *filename = (char *)(file->opened_path ? ZSTR_VAL(file->opened_path) : file->filename);
 	uint line;
 	char *bufptr, *endptr;
 	char resolved_path_buf[MAXPATHLEN];
 
-	zend_stream_fixup(file, &data.buf, &data.len);
+	if (zend_stream_fixup(file, &data.buf, &data.len) == FAILURE) {
+		return NULL;
+	}
 
 	data.filename = filename;
 	data.line[0] = 0;
@@ -286,6 +288,14 @@ zend_op_array *phpdbg_compile_file(zend_file_handle *file, int type) {
 	fake.opened_path = NULL;
 	zend_file_handle_dtor(&fake);
 
+	dataptr->op_array = ret;
+	if (dataptr->op_array->refcount) {
+		++*dataptr->op_array->refcount;
+	} else {
+		dataptr->op_array->refcount = emalloc(sizeof(uint32_t));
+		*dataptr->op_array->refcount = 2;
+	}
+
 	return ret;
 }
 
@@ -297,6 +307,10 @@ void phpdbg_free_file_source(phpdbg_file_source *data) {
 #endif
 	if (data->buf) {
 		efree(data->buf);
+	}
+
+	if (destroy_op_array(data->op_array)) {
+		efree(data->op_array);
 	}
 
 	efree(data);
