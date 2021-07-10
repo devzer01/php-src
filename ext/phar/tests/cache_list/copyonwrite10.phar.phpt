@@ -4,11 +4,11 @@ Phar: copy-on-write test 10 [cache_list]
 default_charset=UTF-8
 phar.cache_list={PWD}/copyonwrite10.phar.php
 phar.readonly=0
---SKIPIF--
-<?php if (!extension_loaded("phar")) die("skip"); ?>
+--EXTENSIONS--
+phar
 --FILE_EXTERNAL--
 files/write10.phar
---EXPECTF--
+--EXPECT--
 string(214) "<?php
 $p = new Phar(__FILE__);
 var_dump($p->getStub());

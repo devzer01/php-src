@@ -1,25 +1,21 @@
 /*
   +----------------------------------------------------------------------+
-  | PHP Version 7                                                        |
-  +----------------------------------------------------------------------+
-  | Copyright (c) 2006-2015 The PHP Group                                |
+  | Copyright (c) The PHP Group                                          |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
   | available through the world-wide-web at the following url:           |
-  | http://www.php.net/license/3_01.txt                                  |
+  | https://www.php.net/license/3_01.txt                                 |
   | If you did not receive a copy of the PHP license and are unable to   |
   | obtain it through the world-wide-web, please send a note to          |
   | license@php.net so we can mail you a copy immediately.               |
   +----------------------------------------------------------------------+
-  | Authors: Andrey Hristov <andrey@mysql.com>                           |
-  |          Ulf Wendel <uwendel@mysql.com>                              |
-  |          Georg Richter <georg@mysql.com>                             |
+  | Authors: Andrey Hristov <andrey@php.net>                             |
+  |          Ulf Wendel <uw@php.net>                                     |
+  |          Georg Richter <georg@php.net>                               |
   +----------------------------------------------------------------------+
 */
-
 #include "php.h"
-#include "php_globals.h"
 #include "mysqlnd.h"
 #include "mysqlnd_wireprotocol.h"
 #include "mysqlnd_priv.h"
@@ -125,7 +121,7 @@ void mysqlnd_local_infile_end(void * ptr)
 
 
 /* {{{ mysqlnd_local_infile_default */
-void
+PHPAPI void
 mysqlnd_local_infile_default(MYSQLND_CONN_DATA * conn)
 {
 	conn->infile.local_infile_init = mysqlnd_local_infile_init;
@@ -136,12 +132,12 @@ mysqlnd_local_infile_default(MYSQLND_CONN_DATA * conn)
 /* }}} */
 
 
-static const char *lost_conn = "Lost connection to MySQL server during LOAD DATA of local file";
+static const char *lost_conn = "Lost connection to MySQL server during LOAD DATA of a local file";
 
 
 /* {{{ mysqlnd_handle_local_infile */
 enum_func_status
-mysqlnd_handle_local_infile(MYSQLND_CONN_DATA * conn, const char * filename, zend_bool * is_warning)
+mysqlnd_handle_local_infile(MYSQLND_CONN_DATA * conn, const char * const filename, bool * is_warning)
 {
 	zend_uchar			*buf = NULL;
 	zend_uchar			empty_packet[MYSQLND_HEADER_SIZE];
@@ -151,14 +147,55 @@ mysqlnd_handle_local_infile(MYSQLND_CONN_DATA * conn, const char * filename, zen
 	int					bufsize;
 	size_t				ret;
 	MYSQLND_INFILE		infile;
-	MYSQLND_NET			* net = conn->net;
+	MYSQLND_PFC			* net = conn->protocol_frame_codec;
+	MYSQLND_VIO			* vio = conn->vio;
+	bool				is_local_infile_enabled = (conn->options->flags & CLIENT_LOCAL_FILES) == CLIENT_LOCAL_FILES;
+	const char*			local_infile_directory = conn->options->local_infile_directory;
+	bool				is_local_infile_dir_set = local_infile_directory != NULL;
+	bool				prerequisities_ok = TRUE;
 
 	DBG_ENTER("mysqlnd_handle_local_infile");
 
-	if (!(conn->options->flags & CLIENT_LOCAL_FILES)) {
-		php_error_docref(NULL, E_WARNING, "LOAD DATA LOCAL INFILE forbidden");
+	/*
+		if local_infile is disabled, and local_infile_dir is not set, then operation is forbidden
+	*/
+	if (!is_local_infile_enabled && !is_local_infile_dir_set) {
+		SET_CLIENT_ERROR(conn->error_info, CR_LOAD_DATA_LOCAL_INFILE_REJECTED, UNKNOWN_SQLSTATE,
+						"LOAD DATA LOCAL INFILE is forbidden, check related settings like "
+						"mysqli.allow_local_infile|mysqli.local_infile_directory or "
+						"PDO::MYSQL_ATTR_LOCAL_INFILE|PDO::MYSQL_ATTR_LOCAL_INFILE_DIRECTORY");
+		prerequisities_ok = FALSE;
+	}
+
+	/*
+		if local_infile_dir is set, then check whether it actually exists, and is accessible
+	*/
+	if (is_local_infile_dir_set) {
+		php_stream *stream = php_stream_opendir(local_infile_directory, REPORT_ERRORS, NULL);
+		if (stream) {
+			php_stream_closedir(stream);
+		} else {
+			SET_CLIENT_ERROR(conn->error_info, CR_LOAD_DATA_LOCAL_INFILE_REJECTED, UNKNOWN_SQLSTATE, "cannot open local_infile_directory");
+			prerequisities_ok = FALSE;
+		}
+	}
+
+	/*
+		if local_infile is disabled and local_infile_dir is set, then we have to check whether
+		filename is located inside its subtree
+		but only in such a case, because when local_infile is enabled, then local_infile_dir is ignored
+	*/
+	if (prerequisities_ok && !is_local_infile_enabled && is_local_infile_dir_set) {
+		if (php_check_specific_open_basedir(local_infile_directory, filename) == -1) {
+			SET_CLIENT_ERROR(conn->error_info, CR_LOAD_DATA_LOCAL_INFILE_REJECTED, UNKNOWN_SQLSTATE,
+							"LOAD DATA LOCAL INFILE DIRECTORY restriction in effect. Unable to open file");
+			prerequisities_ok = FALSE;
+		}
+	}
+
+	if (!prerequisities_ok) {
 		/* write empty packet to server */
-		ret = net->data->m.send_ex(net, empty_packet, 0, conn->stats, conn->error_info);
+		ret = net->data->m.send(net, vio, empty_packet, 0, conn->stats, conn->error_info);
 		*is_warning = TRUE;
 		goto infile_error;
 	}
@@ -176,24 +213,24 @@ mysqlnd_handle_local_infile(MYSQLND_CONN_DATA * conn, const char * filename, zen
 		*is_warning = TRUE;
 		/* error occurred */
 		tmp_error_no = infile.local_infile_error(info, tmp_buf, sizeof(tmp_buf));
-		SET_CLIENT_ERROR(*conn->error_info, tmp_error_no, UNKNOWN_SQLSTATE, tmp_buf);
+		SET_CLIENT_ERROR(conn->error_info, tmp_error_no, UNKNOWN_SQLSTATE, tmp_buf);
 		/* write empty packet to server */
-		ret = net->data->m.send_ex(net, empty_packet, 0, conn->stats, conn->error_info);
+		ret = net->data->m.send(net, vio, empty_packet, 0, conn->stats, conn->error_info);
 		goto infile_error;
 	}
 
 	/* read data */
 	while ((bufsize = infile.local_infile_read (info, buf + MYSQLND_HEADER_SIZE, buflen - MYSQLND_HEADER_SIZE)) > 0) {
-		if ((ret = net->data->m.send_ex(net, buf, bufsize, conn->stats, conn->error_info)) == 0) {
+		if ((ret = net->data->m.send(net, vio, buf, bufsize, conn->stats, conn->error_info)) == 0) {
 			DBG_ERR_FMT("Error during read : %d %s %s", CR_SERVER_LOST, UNKNOWN_SQLSTATE, lost_conn);
-			SET_CLIENT_ERROR(*conn->error_info, CR_SERVER_LOST, UNKNOWN_SQLSTATE, lost_conn);
+			SET_CLIENT_ERROR(conn->error_info, CR_SERVER_LOST, UNKNOWN_SQLSTATE, lost_conn);
 			goto infile_error;
 		}
 	}
 
 	/* send empty packet for eof */
-	if ((ret = net->data->m.send_ex(net, empty_packet, 0, conn->stats, conn->error_info)) == 0) {
-		SET_CLIENT_ERROR(*conn->error_info, CR_SERVER_LOST, UNKNOWN_SQLSTATE, lost_conn);
+	if ((ret = net->data->m.send(net, vio, empty_packet, 0, conn->stats, conn->error_info)) == 0) {
+		SET_CLIENT_ERROR(conn->error_info, CR_SERVER_LOST, UNKNOWN_SQLSTATE, lost_conn);
 		goto infile_error;
 	}
 
@@ -204,7 +241,7 @@ mysqlnd_handle_local_infile(MYSQLND_CONN_DATA * conn, const char * filename, zen
 		*is_warning = TRUE;
 		DBG_ERR_FMT("Bufsize < 0, warning,  %d %s %s", CR_SERVER_LOST, UNKNOWN_SQLSTATE, lost_conn);
 		tmp_error_no = infile.local_infile_error(info, tmp_buf, sizeof(tmp_buf));
-		SET_CLIENT_ERROR(*conn->error_info, tmp_error_no, UNKNOWN_SQLSTATE, tmp_buf);
+		SET_CLIENT_ERROR(conn->error_info, tmp_error_no, UNKNOWN_SQLSTATE, tmp_buf);
 		goto infile_error;
 	}
 
@@ -212,7 +249,12 @@ mysqlnd_handle_local_infile(MYSQLND_CONN_DATA * conn, const char * filename, zen
 
 infile_error:
 	/* get response from server and update upsert values */
-	if (FAIL == conn->m->simple_command_handle_response(conn, PROT_OK_PACKET, FALSE, COM_QUERY, FALSE)) {
+	if (FAIL == conn->payload_decoder_factory->m.send_command_handle_response(
+											conn->payload_decoder_factory,
+											PROT_OK_PACKET, FALSE, COM_QUERY, FALSE,
+											conn->error_info,
+											conn->upsert_status,
+											&conn->last_message)) {
 		result = FAIL;
 	}
 
@@ -224,12 +266,3 @@ infile_error:
 	DBG_RETURN(result);
 }
 /* }}} */
-
-/*
- * Local variables:
- * tab-width: 4
- * c-basic-offset: 4
- * End:
- * vim600: noet sw=4 ts=4 fdm=marker
- * vim<600: noet sw=4 ts=4
- */

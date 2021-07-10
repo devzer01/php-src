@@ -1,13 +1,11 @@
 /*
    +----------------------------------------------------------------------+
-   | PHP Version 7                                                        |
-   +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2015 The PHP Group                                |
+   | Copyright (c) The PHP Group                                          |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
    | available through the world-wide-web at the following url:           |
-   | http://www.php.net/license/3_01.txt                                  |
+   | https://www.php.net/license/3_01.txt                                 |
    | If you did not receive a copy of the PHP license and are unable to   |
    | obtain it through the world-wide-web, please send a note to          |
    | license@php.net so we can mail you a copy immediately.               |
@@ -17,14 +15,12 @@
    +----------------------------------------------------------------------+
 */
 
-/* $Id$ */
-
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
 #include "php.h"
-#if HAVE_LIBXML && HAVE_DOM
+#if defined(HAVE_LIBXML) && defined(HAVE_DOM)
 #include "php_dom.h"
 #include "dom_ce.h"
 
@@ -42,7 +38,11 @@ struct _notationIterator {
 	xmlNotation *notation;
 };
 
-static void itemHashScanner (void *payload, void *data, xmlChar *name) /* {{{ */
+#if LIBXML_VERSION >= 20908
+static void itemHashScanner (void *payload, void *data, const xmlChar *name) /* {{{ */
+#else
+static void itemHashScanner (void *payload, void *data, xmlChar *name)
+#endif
 {
 	nodeIterator *priv = (nodeIterator *)data;
 
@@ -61,9 +61,9 @@ xmlNodePtr create_notation(const xmlChar *name, const xmlChar *ExternalID, const
 	xmlEntityPtr ret;
 
 	ret = (xmlEntityPtr) xmlMalloc(sizeof(xmlEntity));
-    memset(ret, 0, sizeof(xmlEntity));
-    ret->type = XML_NOTATION_NODE;
-    ret->name = xmlStrdup(name);
+	memset(ret, 0, sizeof(xmlEntity));
+	ret->type = XML_NOTATION_NODE;
+	ret->name = xmlStrdup(name);
 	ret->ExternalID = xmlStrdup(ExternalID);
 	ret->SystemID = xmlStrdup(SystemID);
 	ret->length = 0;
@@ -182,6 +182,7 @@ static void php_dom_iterator_move_forward(zend_object_iterator *iter) /* {{{ */
 	int previndex=0;
 	HashTable *nodeht;
 	zval *entry;
+	bool do_curobj_undef = 1;
 
 	php_dom_iterator *iterator = (php_dom_iterator *)iter;
 
@@ -190,17 +191,18 @@ static void php_dom_iterator_move_forward(zend_object_iterator *iter) /* {{{ */
 	objmap = (dom_nnodemap_object *)nnmap->ptr;
 
 	intern = Z_DOMOBJ_P(&iterator->curobj);
-	zval_ptr_dtor(&iterator->curobj);
-	ZVAL_UNDEF(&iterator->curobj);
 
 	if (intern != NULL && intern->ptr != NULL) {
 		if (objmap->nodetype != XML_ENTITY_NODE &&
 			objmap->nodetype != XML_NOTATION_NODE) {
 			if (objmap->nodetype == DOM_NODESET) {
 				nodeht = HASH_OF(&objmap->baseobj_zv);
-				zend_hash_move_forward(nodeht);
-				if ((entry = zend_hash_get_current_data(nodeht))) {
+				zend_hash_move_forward_ex(nodeht, &iterator->pos);
+				if ((entry = zend_hash_get_current_data_ex(nodeht, &iterator->pos))) {
+					zval_ptr_dtor(&iterator->curobj);
+					ZVAL_UNDEF(&iterator->curobj);
 					ZVAL_COPY(&iterator->curobj, entry);
+					do_curobj_undef = 0;
 				}
 			} else {
 				curnode = (xmlNodePtr)((php_libxml_node_ptr *)intern->ptr)->node;
@@ -231,19 +233,25 @@ static void php_dom_iterator_move_forward(zend_object_iterator *iter) /* {{{ */
 		}
 	}
 err:
+	if (do_curobj_undef) {
+		zval_ptr_dtor(&iterator->curobj);
+		ZVAL_UNDEF(&iterator->curobj);
+	}
 	if (curnode) {
 		php_dom_create_object(curnode, &iterator->curobj, objmap->baseobj);
 	}
 }
 /* }}} */
 
-zend_object_iterator_funcs php_dom_iterator_funcs = {
+static const zend_object_iterator_funcs php_dom_iterator_funcs = {
 	php_dom_iterator_dtor,
 	php_dom_iterator_valid,
 	php_dom_iterator_current_data,
 	php_dom_iterator_current_key,
 	php_dom_iterator_move_forward,
-	NULL
+	NULL,
+	NULL,
+	NULL, /* get_gc */
 };
 
 zend_object_iterator *php_dom_get_iterator(zend_class_entry *ce, zval *object, int by_ref) /* {{{ */
@@ -257,12 +265,13 @@ zend_object_iterator *php_dom_get_iterator(zend_class_entry *ce, zval *object, i
 	php_dom_iterator *iterator;
 
 	if (by_ref) {
-		zend_error(E_ERROR, "An iterator cannot be used with foreach by reference");
+		zend_throw_error(NULL, "An iterator cannot be used with foreach by reference");
+		return NULL;
 	}
 	iterator = emalloc(sizeof(php_dom_iterator));
 	zend_iterator_init(&iterator->intern);
 
-	ZVAL_COPY(&iterator->intern.data, object);
+	ZVAL_OBJ_COPY(&iterator->intern.data, Z_OBJ_P(object));
 	iterator->intern.funcs = &php_dom_iterator_funcs;
 
 	ZVAL_UNDEF(&iterator->curobj);
@@ -274,8 +283,8 @@ zend_object_iterator *php_dom_get_iterator(zend_class_entry *ce, zval *object, i
 			objmap->nodetype != XML_NOTATION_NODE) {
 			if (objmap->nodetype == DOM_NODESET) {
 				nodeht = HASH_OF(&objmap->baseobj_zv);
-				zend_hash_internal_pointer_reset(nodeht);
-				if ((entry = zend_hash_get_current_data(nodeht))) {
+				zend_hash_internal_pointer_reset_ex(nodeht, &iterator->pos);
+				if ((entry = zend_hash_get_current_data_ex(nodeht, &iterator->pos))) {
 					ZVAL_COPY(&iterator->curobj, entry);
 				}
 			} else {
@@ -317,12 +326,3 @@ err:
 /* }}} */
 
 #endif
-
-/*
- * Local variables:
- * tab-width: 4
- * c-basic-offset: 4
- * End:
- * vim600: noet sw=4 ts=4 fdm=marker
- * vim<600: noet sw=4 ts=4
- */

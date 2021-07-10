@@ -1,5 +1,7 @@
 --TEST--
 PostgreSQL pg_update()
+--EXTENSIONS--
+pgsql
 --SKIPIF--
 <?php
 include("skipif.inc");
@@ -23,4 +25,5 @@ echo "Ok\n";
 ?>
 --EXPECT--
 UPDATE "php_pgsql_test" SET "num"=1234,"str"=E'ABC',"bin"=E'XYZ' WHERE "num"=1234;
+UPDATE "php_pgsql_test" SET "num='1234',"str='ABC',"bin='XYZ' WHERE "num='1234';
 Ok

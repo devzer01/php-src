@@ -1,7 +1,7 @@
 --TEST--
 GC 033: Crash in GC while run with phpspec
---XFAIL--
-Full GC root buffer not handled correctly yet
+--INI--
+zend.enable_gc = 1
 --FILE--
 <?php
 $a = new stdClass();
@@ -18,13 +18,13 @@ unset($a);
 
 /* let's full the gc roots */
 for ($i=0; $i<9999; $i++) {
-	    $b = range(0, 1);
-		    $b[0] = &$b;
-		    unset($b);
+        $b = range(0, 1);
+            $b[0] = &$b;
+            unset($b);
 }
 
 /* then $a will be freed, but $a->a[0] is not. reference to a freed $a */
 var_dump(gc_collect_cycles());
 ?>
 --EXPECT--
-int(20001)
+int(10002)

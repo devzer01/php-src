@@ -1,8 +1,10 @@
 --TEST--
 PostgreSQL create large object with given oid
+--EXTENSIONS--
+pgsql
 --SKIPIF--
-<?php 
-include("skipif.inc"); 
+<?php
+include("skipif.inc");
 $v = pg_version($conn);
 if (version_compare("8.3", $v["client"]) > 0) die("skip - requires pg client >= 8.3\n");
 if (version_compare("8.3", $v["server"]) > 0) die("skip - requires pg server >= 8.3\n");
@@ -40,8 +42,16 @@ pg_exec ("commit");
 
 echo "OK";
 ?>
---EXPECT--
+--EXPECTF--
 create LO from int
 create LO from string
 create LO using default connection
+
+Deprecated: pg_exec(): Automatic fetching of PostgreSQL connection is deprecated in %s on line %d
+
+Deprecated: pg_lo_create(): Automatic fetching of PostgreSQL connection is deprecated in %s on line %d
+
+Deprecated: pg_lo_unlink(): Automatic fetching of PostgreSQL connection is deprecated in %s on line %d
+
+Deprecated: pg_exec(): Automatic fetching of PostgreSQL connection is deprecated in %s on line %d
 OK

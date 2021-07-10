@@ -14,13 +14,14 @@ var_dump(key($foo));
 doForeach($foo);
 var_dump(key($foo));
 foreach ($foo as $k => $v) {
-	var_dump($k);
+    var_dump($k);
 }
 var_dump(key($foo));
+?>
 --EXPECT--
 int(0)
 int(0)
 int(0)
 int(1)
 int(2)
-NULL
+int(0)

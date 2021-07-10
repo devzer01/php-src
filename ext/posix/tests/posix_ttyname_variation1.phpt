@@ -4,12 +4,8 @@ Test function posix_ttyname() by substituting argument 1 with array values.
 Marco Fabbri mrfabbri@gmail.com
 Francesco Fullone ff@ideato.it
 #PHPTestFest Cesena Italia on 2009-06-20
---SKIPIF--
-<?php
-if (!extension_loaded('posix')) {
-    die('SKIP The posix extension is not loaded.');
-}
-?>
+--EXTENSIONS--
+posix
 --FILE--
 <?php
 
@@ -33,7 +29,7 @@ foreach ( $variation_array as $var ) {
   var_dump(posix_ttyname( $var  ) );
 }
 ?>
---EXPECTF--
+--EXPECT--
 *** Test substituting argument 1 with array values ***
 bool(false)
 bool(false)

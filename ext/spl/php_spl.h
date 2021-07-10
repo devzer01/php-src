@@ -1,13 +1,11 @@
 /*
    +----------------------------------------------------------------------+
-   | PHP Version 7                                                        |
-   +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2015 The PHP Group                                |
+   | Copyright (c) The PHP Group                                          |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
    | available through the world-wide-web at the following url:           |
-   | http://www.php.net/license/3_01.txt                                  |
+   | https://www.php.net/license/3_01.txt                                 |
    | If you did not receive a copy of the PHP license and are unable to   |
    | obtain it through the world-wide-web, please send a note to          |
    | license@php.net so we can mail you a copy immediately.               |
@@ -22,11 +20,7 @@
 #include "php.h"
 #include <stdarg.h>
 
-#if 0
-#define SPL_DEBUG(x)	x
-#else
-#define SPL_DEBUG(x)
-#endif
+#define PHP_SPL_VERSION PHP_VERSION
 
 extern zend_module_entry spl_module_entry;
 #define phpext_spl_ptr &spl_module_entry
@@ -56,38 +50,6 @@ PHP_RINIT_FUNCTION(spl);
 PHP_RSHUTDOWN_FUNCTION(spl);
 PHP_MINFO_FUNCTION(spl);
 
-
-ZEND_BEGIN_MODULE_GLOBALS(spl)
-	zend_string *autoload_extensions;
-	HashTable   *autoload_functions;
-	intptr_t     hash_mask_handle;
-	intptr_t     hash_mask_handlers;
-	int          hash_mask_init;
-	int          autoload_running;
-ZEND_END_MODULE_GLOBALS(spl)
-
-#ifdef ZTS
-# define SPL_G(v) ZEND_TSRMG(spl_globals_id, zend_spl_globals *, v)
-extern int spl_globals_id;
-#else
-# define SPL_G(v) (spl_globals.v)
-extern zend_spl_globals spl_globals;
-#endif
-
-PHP_FUNCTION(spl_classes);
-PHP_FUNCTION(class_parents);
-PHP_FUNCTION(class_implements);
-PHP_FUNCTION(class_uses);
-
-PHPAPI zend_string *php_spl_object_hash(zval *obj);
+PHPAPI zend_string *php_spl_object_hash(zend_object *obj);
 
 #endif /* PHP_SPL_H */
-
-/*
- * Local Variables:
- * c-basic-offset: 4
- * tab-width: 4
- * End:
- * vim600: fdm=marker
- * vim: noet sw=4 ts=4
- */

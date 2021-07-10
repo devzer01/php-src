@@ -1,13 +1,11 @@
 /*
   +----------------------------------------------------------------------+
-  | PHP Version 7                                                        |
-  +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2015 The PHP Group                                |
+  | Copyright (c) The PHP Group                                          |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
   | available through the world-wide-web at the following url:           |
-  | http://www.php.net/license/3_01.txt                                  |
+  | https://www.php.net/license/3_01.txt                                 |
   | If you did not receive a copy of the PHP license and are unable to   |
   | obtain it through the world-wide-web, please send a note to          |
   | license@php.net so we can mail you a copy immediately.               |
@@ -16,13 +14,14 @@
   +----------------------------------------------------------------------+
 */
 
-/* $Id$ */
-
 #ifndef PHP_SIMPLEXML_H
 #define PHP_SIMPLEXML_H
 
 extern zend_module_entry simplexml_module_entry;
 #define phpext_simplexml_ptr &simplexml_module_entry
+
+#include "php_version.h"
+#define PHP_SIMPLEXML_VERSION PHP_VERSION
 
 #ifdef ZTS
 #include "TSRM.h"
@@ -42,9 +41,6 @@ extern zend_module_entry simplexml_module_entry;
 
 PHP_MINIT_FUNCTION(simplexml);
 PHP_MSHUTDOWN_FUNCTION(simplexml);
-#ifdef HAVE_SPL
-PHP_RINIT_FUNCTION(simplexml);
-#endif
 PHP_MINFO_FUNCTION(simplexml);
 
 typedef enum {
@@ -71,12 +67,6 @@ typedef struct {
 	zend_object zo;
 } php_sxe_object;
 
-#ifdef ZTS
-#define SIMPLEXML_G(v) TSRMG(simplexml_globals_id, zend_simplexml_globals *, v)
-#else
-#define SIMPLEXML_G(v) (simplexml_globals.v)
-#endif
-
 #ifdef PHP_WIN32
 #	ifdef PHP_SIMPLEXML_EXPORTS
 #		define PHP_SXE_API __declspec(dllexport)
@@ -87,16 +77,9 @@ typedef struct {
 #	define PHP_SXE_API ZEND_API
 #endif
 
-PHP_SXE_API zend_class_entry *sxe_get_element_class_entry();
+extern PHP_SXE_API zend_class_entry *ce_SimpleXMLIterator;
+extern PHP_SXE_API zend_class_entry *ce_SimpleXMLElement;
+
+PHP_SXE_API zend_class_entry *sxe_get_element_class_entry(void);
 
 #endif
-
-/*
- * Local variables:
- * tab-width: 4
- * c-basic-offset: 4
- * indent-tabs-mode: t
- * End:
- * vim600: fdm=marker
- * vim: noet sw=4 ts=4
- */

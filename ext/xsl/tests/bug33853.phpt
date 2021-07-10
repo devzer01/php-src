@@ -1,14 +1,14 @@
 --TEST--
 Bug #33853 (php:function call __autoload with lowercase param)
---SKIPIF--
-<?php if (!extension_loaded('xsl')) die('skip xsl not loaded'); ?>
+--EXTENSIONS--
+xsl
 --FILE--
 <?php
 
-function __autoload($className) {
-        var_dump($className);
-        exit();
-}
+spl_autoload_register(function ($className) {
+    var_dump($className);
+    exit();
+});
 
 $xsl = new DomDocument();
 $xsl->loadXML('<?xml version="1.0" encoding="iso-8859-1" ?>

@@ -1,17 +1,13 @@
 --TEST--
 Test session_start() function : variation
+--EXTENSIONS--
+session
 --SKIPIF--
 <?php include('skipif.inc'); ?>
 --FILE--
 <?php
 
 ob_start();
-
-/* 
- * Prototype : bool session_start(void)
- * Description : Initialize session data
- * Source code : ext/session/session.c 
- */
 
 echo "*** Testing session_start() : variation ***\n";
 
@@ -32,7 +28,7 @@ session_destroy();
 echo "Done";
 ob_end_flush();
 ?>
---EXPECTF--
+--EXPECT--
 *** Testing session_start() : variation ***
 array(4) {
   ["colour"]=>
@@ -44,7 +40,7 @@ array(4) {
   ["age"]=>
   int(6)
 }
-NULL
+bool(true)
 array(4) {
   ["colour"]=>
   string(5) "green"
@@ -66,4 +62,3 @@ array(4) {
   int(6)
 }
 Done
-

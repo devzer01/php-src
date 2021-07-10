@@ -3,17 +3,12 @@ SQLite3::open test with empty string argument via the constructor
 --CREDITS--
 Thijs Feryn <thijs@feryn.eu>
 #TestFest PHPBelgium 2009
---SKIPIF--
-<?php require_once(dirname(__FILE__) . '/skipif.inc'); ?>
+--EXTENSIONS--
+sqlite3
 --FILE--
 <?php
-try{
-    $db = new SQLite3('');
-} catch(Exception $e) {
-    echo $e->getMessage().PHP_EOL;
-}
+$db = new SQLite3('');
 echo "Done\n";
 ?>
---EXPECTF--
-Unable to expand filepath
+--EXPECT--
 Done

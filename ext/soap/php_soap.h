@@ -1,23 +1,20 @@
 /*
   +----------------------------------------------------------------------+
-  | PHP Version 7                                                        |
-  +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2015 The PHP Group                                |
+  | Copyright (c) The PHP Group                                          |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
   | available through the world-wide-web at the following url:           |
-  | http://www.php.net/license/3_01.txt                                  |
+  | https://www.php.net/license/3_01.txt                                 |
   | If you did not receive a copy of the PHP license and are unable to   |
   | obtain it through the world-wide-web, please send a note to          |
   | license@php.net so we can mail you a copy immediately.               |
   +----------------------------------------------------------------------+
   | Authors: Brad Lafountain <rodif_bl@yahoo.com>                        |
   |          Shane Caraveo <shane@caraveo.com>                           |
-  |          Dmitry Stogov <dmitry@zend.com>                             |
+  |          Dmitry Stogov <dmitry@php.net>                              |
   +----------------------------------------------------------------------+
 */
-/* $Id$ */
 
 #ifndef PHP_SOAP_H
 #define PHP_SOAP_H
@@ -26,7 +23,7 @@
 #include "php_globals.h"
 #include "ext/standard/info.h"
 #include "ext/standard/php_standard.h"
-#if HAVE_PHP_SESSION && !defined(COMPILE_DL_SESSION)
+#if defined(HAVE_PHP_SESSION) && !defined(COMPILE_DL_SESSION)
 #include "ext/session/php_session.h"
 #endif
 #include "zend_smart_str.h"
@@ -35,9 +32,7 @@
 #include <libxml/parser.h>
 #include <libxml/xpath.h>
 
-#ifndef PHP_HAVE_STREAMS
-# error You lose - must be compiled against PHP 4.3.0 or later
-#endif
+#define PHP_SOAP_VERSION PHP_VERSION
 
 #ifndef PHP_WIN32
 # define TRUE 1
@@ -164,7 +159,7 @@ ZEND_BEGIN_MODULE_GLOBALS(soap)
 	int        cur_uniq_ns;
 	int        soap_version;
 	sdlPtr     sdl;
-	zend_bool  use_soap_error_handler;
+	bool  use_soap_error_handler;
 	char*      error_code;
 	zval       error_object;
 	char       cache;
@@ -191,14 +186,10 @@ extern zend_module_entry soap_module_entry;
 #define phpext_soap_ptr soap_module_ptr
 
 ZEND_EXTERN_MODULE_GLOBALS(soap)
+#define SOAP_GLOBAL(v) ZEND_MODULE_GLOBALS_ACCESSOR(soap, v)
 
-#ifdef ZTS
-# define SOAP_GLOBAL(v) ZEND_TSRMG(soap_globals_id, zend_soap_globals *, v)
-# ifdef COMPILE_DL_SOAP
-ZEND_TSRMLS_CACHE_EXTERN;
-# endif
-#else
-# define SOAP_GLOBAL(v) (soap_globals.v)
+#if defined(ZTS) && defined(COMPILE_DL_SOAP)
+ZEND_TSRMLS_CACHE_EXTERN()
 #endif
 
 extern zend_class_entry* soap_var_class_entry;

@@ -1,12 +1,12 @@
 --TEST--
 bcpow() with a negative exponent
---SKIPIF--
-<?php if(!extension_loaded("bcmath")) print "skip"; ?>
+--EXTENSIONS--
+bcmath
 --INI--
 bcmath.scale=0
 --FILE--
 <?php
 echo bcpow("2", "-4");
 ?>
---EXPECTF--
+--EXPECT--
 0

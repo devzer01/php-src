@@ -1,11 +1,12 @@
 --TEST--
 SQLite3::open error test
+--EXTENSIONS--
+sqlite3
 --SKIPIF--
 <?php
 if(substr(PHP_OS, 0, 3) != 'WIN' ) {
-	die('skip windows only test');
+    die('skip windows only test');
 }
-require_once(__DIR__ . '/skipif.inc');
 ?>
 --FILE--
 <?php
@@ -19,9 +20,9 @@ $cmd = $icacls . ' ' . $unreadable . ' /inheritance:r /deny ' . $user . ':(F,M,R
 exec($cmd);
 
 try {
-	$db = new SQLite3($unreadable);
+    $db = new SQLite3($unreadable);
 } catch (Exception $e) {
-	echo $e . "\n";
+    echo $e . "\n";
 }
 echo "Done\n";
 
@@ -30,7 +31,7 @@ exec($cmd);
 unlink($unreadable);
 ?>
 --EXPECTF--
-exception 'Exception' with message 'Unable to open database: %s' in %ssqlite3_15_open_error-win.php:%d
+Exception: Unable to open database: %s in %ssqlite3_15_open_error-win.php:%d
 Stack trace:
 #0 %ssqlite3_15_open_error-win.php(%d): SQLite3->__construct('%s')
 #1 {main}

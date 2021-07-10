@@ -1,13 +1,11 @@
 /*
    +----------------------------------------------------------------------+
-   | PHP Version 7                                                        |
-   +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2015 The PHP Group                                |
+   | Copyright (c) The PHP Group                                          |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
    | available through the world-wide-web at the following url:           |
-   | http://www.php.net/license/3_01.txt                                  |
+   | https://www.php.net/license/3_01.txt                                 |
    | If you did not receive a copy of the PHP license and are unable to   |
    | obtain it through the world-wide-web, please send a note to          |
    | license@php.net so we can mail you a copy immediately.               |
@@ -15,8 +13,6 @@
    | Author: Sascha Schumann <sascha@schumann.cx>                         |
    +----------------------------------------------------------------------+
  */
-
-/* $Id$ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -35,7 +31,11 @@
 #include <db.h>
 #endif
 
-static void php_dba_db3_errcall_fcn(const char *errpfx, char *msg)
+static void php_dba_db3_errcall_fcn(
+#if (DB_VERSION_MAJOR > 4 || (DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR >= 3))
+	const DB_ENV *dbenv,
+#endif
+	const char *errpfx, const char *msg)
 {
 
 	php_error_docref(NULL, E_NOTICE, "%s%s", errpfx?errpfx:"", msg);
@@ -80,8 +80,7 @@ DBA_OPEN_FUNC(db3)
 	}
 
 	if (info->argc > 0) {
-		convert_to_long_ex(&info->argv[0]);
-		filemode = Z_LVAL(info->argv[0]);
+		filemode = zval_get_long(&info->argv[0]);
 	}
 
 #ifdef DB_FCNTL_LOCKING
@@ -90,7 +89,12 @@ DBA_OPEN_FUNC(db3)
 
 	if ((err=db_create(&dbp, NULL, 0)) == 0) {
 	    dbp->set_errcall(dbp, php_dba_db3_errcall_fcn);
-	    if ((err=dbp->open(dbp, info->path, NULL, type, gmode, filemode)) == 0) {
+		if(
+#if (DB_VERSION_MAJOR > 4 || (DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR >= 1))
+			(err=dbp->open(dbp, 0, info->path, NULL, type, gmode, filemode)) == 0) {
+#else
+			(err=dbp->open(dbp, info->path, NULL, type, gmode, filemode)) == 0) {
+#endif
 			dba_db3_data *data;
 
 			data = pemalloc(sizeof(*data), info->flags&DBA_PERSISTENT);
@@ -226,12 +230,3 @@ DBA_INFO_FUNC(db3)
 }
 
 #endif
-
-/*
- * Local variables:
- * tab-width: 4
- * c-basic-offset: 4
- * End:
- * vim600: sw=4 ts=4 fdm=marker
- * vim<600: sw=4 ts=4
- */

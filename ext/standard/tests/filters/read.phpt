@@ -3,8 +3,8 @@ stream filter - reading
 --FILE--
 <?php
 echo "-TEST\n";
-class filter extends php_user_filter {
-    function filter($in, $out, &$consumed, $closing)
+class strtoupper_filter extends php_user_filter {
+    function filter($in, $out, &$consumed, $closing): int
     {
         $output = 0;
         while ($bucket = stream_bucket_make_writeable($in)) {
@@ -21,7 +21,7 @@ class filter extends php_user_filter {
         return $output ? PSFS_PASS_ON : PSFS_FEED_ME;
     }
 }
-stream_filter_register("strtoupper", "filter")
+stream_filter_register("strtoupper", "strtoupper_filter")
    or die("Failed to register filter");
 
 if ($f = fopen(__FILE__, "rb")) {
@@ -37,8 +37,8 @@ echo "Done\n";
 %sTEST
 <?PHP
 ECHO "-TEST\N";
-CLASS FILTER EXTENDS PHP_USER_FILTER {
-    FUNCTION FILTER($IN, $OUT, &$CONSUMED, $CLOSING)
+CLASS STRTOUPPER_FILTER EXTENDS PHP_USER_FILTER {
+    FUNCTION FILTER($IN, $OUT, &$CONSUMED, $CLOSING): INT
     {
         $OUTPUT = 0;
         WHILE ($BUCKET = STREAM_BUCKET_MAKE_WRITEABLE($IN)) {
@@ -55,7 +55,7 @@ CLASS FILTER EXTENDS PHP_USER_FILTER {
         RETURN $OUTPUT ? PSFS_PASS_ON : PSFS_FEED_ME;
     }
 }
-STREAM_FILTER_REGISTER("STRTOUPPER", "FILTER")
+STREAM_FILTER_REGISTER("STRTOUPPER", "STRTOUPPER_FILTER")
    OR DIE("FAILED TO REGISTER FILTER");
 
 IF ($F = FOPEN(__FILE__, "RB")) {

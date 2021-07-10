@@ -1,24 +1,29 @@
 /*
-   +----------------------------------------------------------------------+
-   | PHP Version 7                                                        |
-   +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2015 The PHP Group                                |
-   +----------------------------------------------------------------------+
-   | This source file is subject to version 3.01 of the PHP license,      |
-   | that is bundled with this package in the file LICENSE, and is        |
-   | available through the world-wide-web at the following url:           |
-   | http://www.php.net/license/3_01.txt                                  |
-   | If you did not receive a copy of the PHP license and are unable to   |
-   | obtain it through the world-wide-web, please send a note to          |
-   | license@php.net so we can mail you a copy immediately.               |
-   +----------------------------------------------------------------------+
-   | Authors: Derick Rethans <derick@derickrethans.nl>                    |
-   +----------------------------------------------------------------------+
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2015-2019 Derick Rethans
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
  */
 
-/* $Id$ */
-
 #include "timelib.h"
+#include "timelib_private.h"
 
 static int m_table_common[13] = { -1, 0, 3, 3, 6, 1, 4, 6, 2, 5, 0, 3, 5 }; /* 1 = jan */
 static int m_table_leap[13] =   { -1, 6, 2, 3, 6, 1, 4, 6, 2, 5, 0, 3, 5 }; /* 1 = jan */
@@ -133,17 +138,58 @@ void timelib_isoweek_from_date(timelib_sll y, timelib_sll m, timelib_sll d, time
 	}
 }
 
-timelib_sll timelib_daynr_from_weeknr(timelib_sll y, timelib_sll w, timelib_sll d)
+void timelib_isodate_from_date(timelib_sll y, timelib_sll m, timelib_sll d, timelib_sll *iy, timelib_sll *iw, timelib_sll *id)
+{
+	timelib_isoweek_from_date(y, m, d, iw, iy);
+	*id = timelib_day_of_week_ex(y, m, d, 1);
+}
+
+timelib_sll timelib_daynr_from_weeknr(timelib_sll iy, timelib_sll iw, timelib_sll id)
 {
 	timelib_sll dow, day;
 
 	/* Figure out the dayofweek for y-1-1 */
-	dow = timelib_day_of_week(y, 1, 1);
+	dow = timelib_day_of_week(iy, 1, 1);
 	/* then use that to figure out the offset for day 1 of week 1 */
 	day = 0 - (dow > 4 ? dow - 7 : dow);
 
 	/* Add weeks and days */
-	return day + ((w - 1) * 7) + d;
+	return day + ((iw - 1) * 7) + id;
+}
+
+void timelib_date_from_isodate(timelib_sll iy, timelib_sll iw, timelib_sll id, timelib_sll *y, timelib_sll *m, timelib_sll *d)
+{
+	timelib_sll daynr = timelib_daynr_from_weeknr(iy, iw, id) + 1;
+	int *table;
+	bool is_leap_year;
+
+	// Invariant: is_leap_year == timelib_is_leap(*y)
+	*y = iy;
+	is_leap_year = timelib_is_leap(*y);
+
+	// Establish invariant that daynr >= 0
+	while (daynr <= 0) {
+		*y -= 1;
+		daynr += (is_leap_year = timelib_is_leap(*y)) ? 366 : 365;
+	}
+
+	// Establish invariant that daynr <= number of days in *yr
+	while (daynr > (is_leap_year ? 366 : 365)) {
+		daynr -= is_leap_year ? 366 : 365;
+		*y += 1;
+		is_leap_year = timelib_is_leap(*y);
+	}
+
+	table = is_leap_year ? ml_table_leap : ml_table_common;
+
+	// Establish invariant that daynr <= number of days in *m
+	*m = 1;
+	while (daynr > table[*m]) {
+		daynr -= table[*m];
+		*m += 1;
+	}
+
+	*d = daynr;
 }
 
 int timelib_valid_time(timelib_sll h, timelib_sll i, timelib_sll s)

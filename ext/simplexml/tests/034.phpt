@@ -1,9 +1,7 @@
 --TEST--
 SimpleXML: cast to array
---FAIL--
-Length of cast array does not match expected length
---SKIPIF--
-<?php if (!extension_loaded("simplexml")) print "skip"; ?>
+--EXTENSIONS--
+simplexml
 --FILE--
 <?php
 $string = '<?xml version="1.0"?>
@@ -20,5 +18,5 @@ echo count($p);
 $p = (array)$foo->bar->p;
 echo count($p);
 ?>
---EXPECTF--
+--EXPECT--
 33

@@ -11,7 +11,7 @@
     This library is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Lesser General Public License for more details.  (COPYING.LIB)
+    Lesser General Public License for more details.  (LICENSE)
 
     You should have received a copy of the GNU Lesser General Public
     License along with this library; if not, write to:
@@ -31,7 +31,6 @@
 
 #include <config.h>
 #include <stdio.h>
-#include <assert.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <stdarg.h>
@@ -44,11 +43,7 @@
    placed into RESULT.  It is written so that NUM and RESULT can be
    the same pointers.  */
 
-static void
-_one_mult (num, size, digit, result)
-     unsigned char *num;
-     int size, digit;
-     unsigned char *result;
+static void _one_mult (unsigned char *num, int size, int digit, unsigned char *result)
 {
   int carry, value;
   unsigned char *nptr, *rptr;
@@ -128,13 +123,11 @@ bc_divide (bc_num n1, bc_num n2, bc_num *quot, int scale)
   else
     extra = 0;
   num1 = (unsigned char *) safe_emalloc (1, n1->n_len+n1->n_scale, extra+2);
-  if (num1 == NULL) bc_out_of_memory();
   memset (num1, 0, n1->n_len+n1->n_scale+extra+2);
   memcpy (num1+1, n1->n_value, n1->n_len+n1->n_scale);
 
   len2 = n2->n_len + scale2;
   num2 = (unsigned char *) safe_emalloc (1, len2, 1);
-  if (num2 == NULL) bc_out_of_memory();
   memcpy (num2, n2->n_value, len2);
   *(num2+len2) = 0;
   n2ptr = num2;
@@ -165,7 +158,6 @@ bc_divide (bc_num n1, bc_num n2, bc_num *quot, int scale)
 
   /* Allocate storage for the temporary storage mval. */
   mval = (unsigned char *) safe_emalloc (1, len2, 1);
-  if (mval == NULL) bc_out_of_memory ();
 
   /* Now for the full divide algorithm. */
   if (!zero)
@@ -271,4 +263,3 @@ bc_divide (bc_num n1, bc_num n2, bc_num *quot, int scale)
 
   return 0;	/* Everything is OK. */
 }
-

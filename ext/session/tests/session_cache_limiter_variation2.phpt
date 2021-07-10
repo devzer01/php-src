@@ -1,17 +1,13 @@
 --TEST--
 Test session_cache_limiter() function : variation
+--EXTENSIONS--
+session
 --SKIPIF--
 <?php include('skipif.inc'); ?>
 --FILE--
 <?php
 
 ob_start();
-
-/* 
- * Prototype : string session_cache_limiter([string $cache_limiter])
- * Description : Get and/or set the current cache limiter
- * Source code : ext/session/session.c 
- */
 
 echo "*** Testing session_cache_limiter() : variation ***\n";
 
@@ -32,9 +28,10 @@ ob_end_flush();
 string(7) "nocache"
 bool(true)
 string(7) "nocache"
-string(7) "nocache"
-string(6) "public"
-bool(true)
-string(6) "public"
-Done
 
+Warning: session_cache_limiter(): Session cache limiter cannot be changed when a session is active in %s on line %d
+bool(false)
+string(7) "nocache"
+bool(true)
+string(7) "nocache"
+Done

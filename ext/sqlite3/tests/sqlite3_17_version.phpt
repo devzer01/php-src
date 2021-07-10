@@ -1,7 +1,7 @@
 --TEST--
 SQLite3::version()
---SKIPIF--
-<?php require_once(dirname(__FILE__) . '/skipif.inc'); ?>
+--EXTENSIONS--
+sqlite3
 --FILE--
 <?php
 print_r(SQLite3::version());

@@ -1,8 +1,9 @@
 --TEST--
 PDO Common: PDO::FETCH_INTO
+--EXTENSIONS--
+pdo
 --SKIPIF--
-<?php # vim:ft=php
-if (!extension_loaded('pdo')) die('skip');
+<?php
 $dir = getenv('REDIR_TEST_DIR');
 if (false == $dir) die('skip no driver');
 require_once $dir . 'pdo_test.inc';
@@ -10,7 +11,7 @@ PDOTest::skip();
 ?>
 --FILE--
 <?php
-if (getenv('REDIR_TEST_DIR') === false) putenv('REDIR_TEST_DIR='.dirname(__FILE__) . '/../../pdo/tests/');
+if (getenv('REDIR_TEST_DIR') === false) putenv('REDIR_TEST_DIR='.__DIR__ . '/../../pdo/tests/');
 require_once getenv('REDIR_TEST_DIR') . 'pdo_test.inc';
 $db = PDOTest::factory();
 
@@ -33,7 +34,7 @@ foreach ($data as $row) {
 }
 
 class Test {
-	public $id, $val, $val2;
+    public $id, $val, $val2;
 }
 
 $stmt = $db->prepare('SELECT * FROM test');
@@ -41,21 +42,21 @@ $stmt->setFetchMode(PDO::FETCH_INTO, new Test);
 $stmt->execute();
 
 foreach($stmt as $obj) {
-	var_dump($obj);
+    var_dump($obj);
 }
 
 echo "===FAIL===\n";
 
 class Fail {
-	protected $id;
-	public $val, $val2;
+    protected $id;
+    public $val, $val2;
 }
 
 $stmt->setFetchMode(PDO::FETCH_INTO, new Fail);
 $stmt->execute();
 
 foreach($stmt as $obj) {
-	var_dump($obj);
+    var_dump($obj);
 }
 
 ?>
@@ -110,4 +111,7 @@ object(Test)#%d (3) {
 }
 ===FAIL===
 
-Fatal error: Cannot access protected property Fail::$id in %spdo_025.php on line %d%A
+Fatal error: Uncaught Error: Cannot access protected property Fail::$id in %spdo_025.php:%d
+Stack trace:
+#0 {main}
+  thrown in %spdo_025.php on line %d

@@ -10,8 +10,9 @@ function exception_error_handler() {
 set_error_handler("exception_error_handler");
 try {
    $undefined->undefined();
-} catch(Exception $e) {
+} catch(Throwable $e) {
     echo "Exception is thrown";
 }
+?>
 --EXPECT--
 Exception is thrown

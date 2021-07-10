@@ -1,13 +1,13 @@
 --TEST--
 SOAP Server 6: setclass with constructor
---SKIPIF--
-<?php require_once('skipif.inc'); ?>
+--EXTENSIONS--
+soap
 --FILE--
 <?php
 class Foo {
   private $str = "";
 
-  function Foo($str) {
+  function __construct($str) {
     $this->str = $str . " World";
   }
 

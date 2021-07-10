@@ -3,10 +3,8 @@ Testing imageconvolution() of GD library
 --CREDITS--
 Guilherme Blanco <guilhermeblanco [at] hotmail [dot] com>
 #testfest PHPSP on 2009-06-20
---SKIPIF--
-<?php 
-if (!extension_loaded("gd")) die("skip GD not present");
-?>
+--EXTENSIONS--
+gd
 --FILE--
 <?php
 $image = imagecreatetruecolor(180, 30);
@@ -22,12 +20,8 @@ $gaussian = array(
 
 imageconvolution($image, $gaussian, 16, 0);
 
-ob_start();
-imagepng($image, null, 9);
-$img = ob_get_contents();
-ob_end_clean();
-
-echo md5(base64_encode($img));
+include_once __DIR__ . '/func.inc';
+test_image_equals_file(__DIR__ . '/imageconvolution_basic.png', $image);
 ?>
 --EXPECT--
-594576a2a2a689447ffc07eb5a73f09b
+The images are equal.

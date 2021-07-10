@@ -1,28 +1,29 @@
 /*
-   +----------------------------------------------------------------------+
-   | PHP Version 7                                                        |
-   +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2015 The PHP Group                                |
-   +----------------------------------------------------------------------+
-   | This source file is subject to version 3.01 of the PHP license,      |
-   | that is bundled with this package in the file LICENSE, and is        |
-   | available through the world-wide-web at the following url:           |
-   | http://www.php.net/license/3_01.txt                                  |
-   | If you did not receive a copy of the PHP license and are unable to   |
-   | obtain it through the world-wide-web, please send a note to          |
-   | license@php.net so we can mail you a copy immediately.               |
-   +----------------------------------------------------------------------+
-   | Authors: Derick Rethans <derick@derickrethans.nl>                    |
-   +----------------------------------------------------------------------+
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2015-2019 Derick Rethans
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
  */
 
-/* $Id$ */
-
 #include "timelib.h"
-
-/*                                    jan  feb  mrt  apr  may  jun  jul  aug  sep  oct  nov  dec */
-static int month_tab_leap[12]     = {  -1,  30,  59,  90, 120, 151, 181, 212, 243, 273, 304, 334 };
-static int month_tab[12]          = {   0,  31,  59,  90, 120, 151, 181, 212, 243, 273, 304, 334 };
+#include "timelib_private.h"
 
 /*                                    dec  jan  feb  mrt  apr  may  jun  jul  aug  sep  oct  nov  dec */
 static int days_in_month_leap[13] = {  31,  31,  29,  31,  30,  31,  30,  31,  31,  30,  31,  30,  31 };
@@ -108,9 +109,9 @@ static int do_range_limit_days(timelib_sll *y, timelib_sll *m, timelib_sll *d)
 	timelib_sll days_last_month;
 
 	/* can jump an entire leap year period quickly */
-	if (*d >= DAYS_PER_LYEAR_PERIOD || *d <= -DAYS_PER_LYEAR_PERIOD) {
-		*y += YEARS_PER_LYEAR_PERIOD * (*d / DAYS_PER_LYEAR_PERIOD);
-		*d -= DAYS_PER_LYEAR_PERIOD * (*d / DAYS_PER_LYEAR_PERIOD);
+	if (*d >= DAYS_PER_ERA || *d <= -DAYS_PER_ERA) {
+		*y += YEARS_PER_ERA * (*d / DAYS_PER_ERA);
+		*d -= DAYS_PER_ERA * (*d / DAYS_PER_ERA);
 	}
 
 	do_range_limit(1, 13, 12, m, y);
@@ -148,9 +149,17 @@ static void do_adjust_for_weekday(timelib_time* time)
 	current_dow = timelib_day_of_week(time->y, time->m, time->d);
 	if (time->relative.weekday_behavior == 2)
 	{
-		if (time->relative.weekday == 0) {
+		/* To make "this week" work, where the current DOW is a "sunday" */
+		if (current_dow == 0 && time->relative.weekday != 0) {
+			time->relative.weekday -= 7;
+		}
+
+		/* To make "sunday this week" work, where the current DOW is not a
+		 * "sunday" */
+		if (time->relative.weekday == 0 && current_dow != 0) {
 			time->relative.weekday = 7;
 		}
+
 		time->d -= current_dow;
 		time->d += time->relative.weekday;
 		return;
@@ -169,6 +178,7 @@ static void do_adjust_for_weekday(timelib_time* time)
 
 void timelib_do_rel_normalize(timelib_time *base, timelib_rel_time *rt)
 {
+	do_range_limit(0, 1000000, 1000000, &rt->us, &rt->s);
 	do_range_limit(0, 60, 60, &rt->s, &rt->i);
 	do_range_limit(0, 60, 60, &rt->i, &rt->h);
 	do_range_limit(0, 24, 24, &rt->h, &rt->d);
@@ -178,12 +188,44 @@ void timelib_do_rel_normalize(timelib_time *base, timelib_rel_time *rt)
 	do_range_limit(0, 12, 12, &rt->m, &rt->y);
 }
 
+static void magic_date_calc(timelib_time *time)
+{
+	timelib_sll y, ddd, mi, mm, dd, g;
+
+	/* The algorithm doesn't work before the year 1 */
+	if (time->d < -719498) {
+		return;
+	}
+
+	g = time->d + HINNANT_EPOCH_SHIFT - 1;
+
+	y = (10000 * g + 14780) / 3652425;
+	ddd = g - ((365*y) + (y/4) - (y/100) + (y/400));
+	if (ddd < 0) {
+		y--;
+		ddd = g - ((365*y) + (y/4) - (y/100) + (y/400));
+	}
+	mi = (100 * ddd + 52) / 3060;
+	mm = ((mi + 2) % 12) + 1;
+	y = y + (mi + 2) / 12;
+	dd = ddd - ((mi * 306 + 5) / 10) + 1;
+	time->y = y;
+	time->m = mm;
+	time->d = dd;
+}
+
 void timelib_do_normalize(timelib_time* time)
 {
+	if (time->us != TIMELIB_UNSET) do_range_limit(0, 1000000, 1000000, &time->us, &time->s);
 	if (time->s != TIMELIB_UNSET) do_range_limit(0, 60, 60, &time->s, &time->i);
 	if (time->s != TIMELIB_UNSET) do_range_limit(0, 60, 60, &time->i, &time->h);
 	if (time->s != TIMELIB_UNSET) do_range_limit(0, 24, 24, &time->h, &time->d);
 	do_range_limit(1, 13, 12, &time->m, &time->y);
+
+	/* Short cut if we're doing things against the Epoch */
+	if (time->y == 1970 && time->m == 1 && time->d != 1) {
+		magic_date_calc(time);
+	}
 
 	do {} while (do_range_limit_days(&time->y, &time->m, &time->d));
 	do_range_limit(1, 13, 12, &time->m, &time->y);
@@ -197,6 +239,8 @@ static void do_adjust_relative(timelib_time* time)
 	timelib_do_normalize(time);
 
 	if (time->have_relative) {
+		time->us += time->relative.us;
+
 		time->s += time->relative.s;
 		time->i += time->relative.i;
 		time->h += time->relative.h;
@@ -205,15 +249,17 @@ static void do_adjust_relative(timelib_time* time)
 		time->m += time->relative.m;
 		time->y += time->relative.y;
 	}
+
 	switch (time->relative.first_last_day_of) {
-		case 1: /* first */
+		case TIMELIB_SPECIAL_FIRST_DAY_OF_MONTH: /* first */
 			time->d = 1;
 			break;
-		case 2: /* last */
+		case TIMELIB_SPECIAL_LAST_DAY_OF_MONTH: /* last */
 			time->d = 0;
 			time->m++;
 			break;
 	}
+
 	timelib_do_normalize(time);
 }
 
@@ -296,151 +342,105 @@ static void do_adjust_special_early(timelib_time* time)
 				break;
 		}
 	}
+	switch (time->relative.first_last_day_of) {
+		case TIMELIB_SPECIAL_FIRST_DAY_OF_MONTH: /* first */
+			time->d = 1;
+			break;
+		case TIMELIB_SPECIAL_LAST_DAY_OF_MONTH: /* last */
+			time->d = 0;
+			time->m++;
+			break;
+	}
 	timelib_do_normalize(time);
 }
 
-static timelib_sll do_years(timelib_sll year)
-{
-	timelib_sll i;
-	timelib_sll res = 0;
-	timelib_sll eras;
-
-	eras = (year - 1970) / 40000;
-	if (eras != 0) {
-		year = year - (eras * 40000);
-		res += (SECS_PER_ERA * eras * 100);
-	}
-
-	if (year >= 1970) {
-		for (i = year - 1; i >= 1970; i--) {
-			if (timelib_is_leap(i)) {
-				res += (DAYS_PER_LYEAR * SECS_PER_DAY);
-			} else {
-				res += (DAYS_PER_YEAR * SECS_PER_DAY);
-			}
-		}
-	} else {
-		for (i = 1969; i >= year; i--) {
-			if (timelib_is_leap(i)) {
-				res -= (DAYS_PER_LYEAR * SECS_PER_DAY);
-			} else {
-				res -= (DAYS_PER_YEAR * SECS_PER_DAY);
-			}
-		}
-	}
-	return res;
-}
-
-static timelib_sll do_months(timelib_ull month, timelib_ull year)
-{
-	if (timelib_is_leap(year)) {
-		return ((month_tab_leap[month - 1] + 1) * SECS_PER_DAY);
-	} else {
-		return ((month_tab[month - 1]) * SECS_PER_DAY);
-	}
-}
-
-static timelib_sll do_days(timelib_ull day)
-{
-	return ((day - 1) * SECS_PER_DAY);
-}
-
-static timelib_sll do_time(timelib_ull hour, timelib_ull minute, timelib_ull second)
-{
-	timelib_sll res = 0;
-
-	res += hour * 3600;
-	res += minute * 60;
-	res += second;
-	return res;
-}
-
-static timelib_sll do_adjust_timezone(timelib_time *tz, timelib_tzinfo *tzi)
+static void do_adjust_timezone(timelib_time *tz, timelib_tzinfo *tzi)
 {
 	switch (tz->zone_type) {
 		case TIMELIB_ZONETYPE_OFFSET:
 
 			tz->is_localtime = 1;
-			return tz->z * 60;
-			break;
+			tz->sse += -tz->z;
+			return;
 
 		case TIMELIB_ZONETYPE_ABBR: {
 			timelib_sll tmp;
 
 			tz->is_localtime = 1;
-			tmp = tz->z;
-			tmp -= tz->dst * 60;
-			tmp *= 60;
-			return tmp;
-			}
-			break;
+			tmp = -tz->z;
+			tmp -= tz->dst * 3600;
+			tz->sse += (-tz->z - tz->dst * SECS_PER_HOUR);
+			return;
+		}
 
 		case TIMELIB_ZONETYPE_ID:
 			tzi = tz->tz_info;
 			/* Break intentionally missing */
 
-		default:
+		default: {
 			/* No timezone in struct, fallback to reference if possible */
-			if (tzi) {
-				timelib_time_offset *before, *after;
-				timelib_sll          tmp;
-				int                  in_transistion;
+			timelib_time_offset *current, *after;
+			timelib_sll          adjustment;
+			int                  in_transition;
 
-				tz->is_localtime = 1;
-				before = timelib_get_time_zone_info(tz->sse, tzi);
-				after = timelib_get_time_zone_info(tz->sse - before->offset, tzi);
-				timelib_set_timezone(tz, tzi);
-
-				in_transistion = (
-					((tz->sse - after->offset) >= (after->transistion_time + (before->offset - after->offset))) &&
-					((tz->sse - after->offset) < after->transistion_time)
-				);
-
-				if ((before->offset != after->offset) && !in_transistion) {
-					tmp = -after->offset;
-				} else {
-					tmp = -tz->z;
-				}
-				timelib_time_offset_dtor(before);
-				timelib_time_offset_dtor(after);
-
-				{
-					timelib_time_offset *gmt_offset;
-
-					gmt_offset = timelib_get_time_zone_info(tz->sse + tmp, tzi);
-					tz->z = gmt_offset->offset;
-
-					tz->dst = gmt_offset->is_dst;
-					if (tz->tz_abbr) {
-						free(tz->tz_abbr);
-					}
-					tz->tz_abbr = strdup(gmt_offset->abbr);
-					timelib_time_offset_dtor(gmt_offset);
-				}
-				return tmp;
+			if (!tzi) {
+				return;
 			}
+
+			current = timelib_get_time_zone_info(tz->sse, tzi);
+			after = timelib_get_time_zone_info(tz->sse - current->offset, tzi);
+			tz->is_localtime = 1;
+
+			in_transition = (
+				((tz->sse - after->offset) >= (after->transition_time + (current->offset - after->offset))) &&
+				((tz->sse - after->offset) < after->transition_time)
+			);
+
+			if ((current->offset != after->offset) && !in_transition) {
+				adjustment = -after->offset;
+			} else {
+				adjustment = -current->offset;
+			}
+			timelib_time_offset_dtor(current);
+			timelib_time_offset_dtor(after);
+
+			tz->sse += adjustment;
+			timelib_set_timezone(tz, tzi);
+			return;
+		}
 	}
-	return 0;
+	return;
+}
+
+timelib_sll timelib_epoch_days_from_time(timelib_time *time)
+{
+	timelib_sll y = time->y; // Make copy, as we don't want to change the original one
+	timelib_sll era, year_of_era, day_of_year, day_of_era;
+
+	y -= time->m <= 2;
+	era = (y >= 0 ? y : y - 399) / YEARS_PER_ERA;
+	year_of_era = y - era * YEARS_PER_ERA;                                                        // [0, 399]
+	day_of_year = (153 * (time->m + (time->m > 2 ? -3 : 9)) + 2)/5 + time->d - 1;                 // [0, 365]
+	day_of_era = year_of_era * DAYS_PER_YEAR + year_of_era / 4 - year_of_era / 100 + day_of_year; // [0, 146096]
+
+	return era * DAYS_PER_ERA + day_of_era - HINNANT_EPOCH_SHIFT;
 }
 
 void timelib_update_ts(timelib_time* time, timelib_tzinfo* tzi)
 {
-	timelib_sll res = 0;
-
 	do_adjust_special_early(time);
 	do_adjust_relative(time);
 	do_adjust_special(time);
-	res += do_years(time->y);
-	res += do_months(time->m, time->y);
-	res += do_days(time->d);
-	res += do_time(time->h, time->i, time->s);
-	time->sse = res;
 
-	res += do_adjust_timezone(time, tzi);
-	time->sse = res;
+	time->sse =
+		(timelib_epoch_days_from_time(time) * SECS_PER_DAY) +
+		timelib_hms_to_seconds(time->h, time->i, time->s);
+
+	// This modifies time->sse, if needed
+	do_adjust_timezone(time, tzi);
 
 	time->sse_uptodate = 1;
-	time->have_relative = time->relative.have_weekday_relative = time->relative.have_special_relative = 0;
+	time->have_relative = time->relative.have_weekday_relative = time->relative.have_special_relative = time->relative.first_last_day_of = 0;
 }
 
 #if 0

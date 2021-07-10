@@ -1,13 +1,11 @@
 /*
    +----------------------------------------------------------------------+
-   | PHP Version 5                                                        |
-   +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2015 The PHP Group                                |
+   | Copyright (c) The PHP Group                                          |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
    | available through the world-wide-web at the following url:           |
-   | http://www.php.net/license/3_01.txt                                  |
+   | https://www.php.net/license/3_01.txt                                 |
    | If you did not receive a copy of the PHP license and are unable to   |
    | obtain it through the world-wide-web, please send a note to          |
    | license@php.net so we can mail you a copy immediately.               |
@@ -23,8 +21,81 @@
 #include "phpdbg_utils.h"
 #include "phpdbg_frame.h"
 #include "phpdbg_list.h"
+#include "zend_smart_str.h"
 
-ZEND_EXTERN_MODULE_GLOBALS(phpdbg);
+ZEND_EXTERN_MODULE_GLOBALS(phpdbg)
+
+static inline void phpdbg_append_individual_arg(smart_str *s, uint32_t i, zend_function *func, zval *arg) {
+	const zend_arg_info *arginfo = func->common.arg_info;
+	char *arg_name = NULL;
+
+	if (i) {
+		smart_str_appends(s, ", ");
+	}
+	if (i < func->common.num_args) {
+		if (arginfo) {
+			if (func->type == ZEND_INTERNAL_FUNCTION) {
+				arg_name = (char *) ((zend_internal_arg_info *) &arginfo[i])->name;
+			} else {
+				arg_name = ZSTR_VAL(arginfo[i].name);
+			}
+		}
+		smart_str_appends(s, arg_name ? arg_name : "?");
+		smart_str_appendc(s, '=');
+	}
+	{
+		char *arg_print = phpdbg_short_zval_print(arg, 40);
+		smart_str_appends(s, arg_print);
+		efree(arg_print);
+	}
+}
+
+zend_string *phpdbg_compile_stackframe(zend_execute_data *ex) {
+	smart_str s = {0};
+	zend_op_array *op_array = &ex->func->op_array;
+	uint32_t i = 0, first_extra_arg = op_array->num_args, num_args = ZEND_CALL_NUM_ARGS(ex);
+	zval *p = ZEND_CALL_ARG(ex, 1);
+
+	if (op_array->scope) {
+		smart_str_append(&s, op_array->scope->name);
+		smart_str_appends(&s, "::");
+	}
+	smart_str_append(&s, op_array->function_name);
+	smart_str_appendc(&s, '(');
+	if (ZEND_CALL_NUM_ARGS(ex) > first_extra_arg) {
+		while (i < first_extra_arg) {
+			phpdbg_append_individual_arg(&s, i, ex->func, p);
+			p++;
+			i++;
+		}
+		p = ZEND_CALL_VAR_NUM(ex, op_array->last_var + op_array->T);
+	}
+	while (i < num_args) {
+		phpdbg_append_individual_arg(&s, i, ex->func, p);
+		p++;
+		i++;
+	}
+	smart_str_appendc(&s, ')');
+
+	if (ex->func->type == ZEND_USER_FUNCTION) {
+		smart_str_appends(&s, " at ");
+		smart_str_append(&s, op_array->filename);
+		smart_str_appendc(&s, ':');
+		smart_str_append_unsigned(&s, ex->opline->lineno);
+	} else {
+		smart_str_appends(&s, " [internal function]");
+	}
+
+	return s.s;
+}
+
+void phpdbg_print_cur_frame_info(void) {
+	const char *file_chr = zend_get_executed_filename();
+	zend_string *file = zend_string_init(file_chr, strlen(file_chr), 0);
+
+	phpdbg_list_file(file, 3, zend_get_executed_lineno() - 1, zend_get_executed_lineno());
+	efree(file);
+}
 
 void phpdbg_restore_frame(void) /* {{{ */
 {
@@ -32,21 +103,26 @@ void phpdbg_restore_frame(void) /* {{{ */
 		return;
 	}
 
+	if (PHPDBG_FRAME(generator)) {
+		if (PHPDBG_FRAME(generator)->execute_data->call) {
+			PHPDBG_FRAME(generator)->frozen_call_stack = zend_generator_freeze_call_stack(PHPDBG_FRAME(generator)->execute_data);
+		}
+		PHPDBG_FRAME(generator) = NULL;
+	}
+
 	PHPDBG_FRAME(num) = 0;
 
 	/* move things back */
 	EG(current_execute_data) = PHPDBG_FRAME(execute_data);
-
-	EG(scope) = PHPDBG_EX(func)->op_array.scope;
 } /* }}} */
 
 void phpdbg_switch_frame(int frame) /* {{{ */
 {
-	zend_execute_data *execute_data = PHPDBG_FRAME(num)?PHPDBG_FRAME(execute_data):EG(current_execute_data);
+	zend_execute_data *execute_data = PHPDBG_FRAME(num) ? PHPDBG_FRAME(execute_data) : EG(current_execute_data);
 	int i = 0;
 
 	if (PHPDBG_FRAME(num) == frame) {
-		phpdbg_notice("frame", "id=\"%d\"", "Already in frame #%d", frame);
+		phpdbg_notice("Already in frame #%d", frame);
 		return;
 	}
 
@@ -61,12 +137,12 @@ void phpdbg_switch_frame(int frame) /* {{{ */
 			} while (execute_data && execute_data->opline == NULL);
 		}
 	} phpdbg_catch_access {
-		phpdbg_error("signalsegv", "", "Couldn't switch frames, invalid data source");
+		phpdbg_error("Couldn't switch frames, invalid data source");
 		return;
 	} phpdbg_end_try_access();
 
 	if (execute_data == NULL) {
-		phpdbg_error("frame", "type=\"maxnum\" id=\"%d\"", "No frame #%d", frame);
+		phpdbg_error("No frame #%d", frame);
 		return;
 	}
 
@@ -78,23 +154,22 @@ void phpdbg_switch_frame(int frame) /* {{{ */
 		/* backup things and jump back */
 		PHPDBG_FRAME(execute_data) = EG(current_execute_data);
 		EG(current_execute_data) = execute_data;
-
-		EG(scope) = PHPDBG_EX(func)->op_array.scope;
 	}
 
-	phpdbg_notice("frame", "id=\"%d\"", "Switched to frame #%d", frame);
+	phpdbg_try_access {
+		zend_string *s = phpdbg_compile_stackframe(EG(current_execute_data));
+		phpdbg_notice("Switched to frame #%d: %.*s", frame, (int) ZSTR_LEN(s), ZSTR_VAL(s));
+		zend_string_release(s);
+	} phpdbg_catch_access {
+		phpdbg_notice("Switched to frame #%d", frame);
+	} phpdbg_end_try_access();
 
-	{
-		const char *file_chr = zend_get_executed_filename();
-		zend_string *file = zend_string_init(file_chr, strlen(file_chr), 0);
-		phpdbg_list_file(file, 3, zend_get_executed_lineno() - 1, zend_get_executed_lineno());
-		efree(file);
-	}
+	phpdbg_print_cur_frame_info();
 } /* }}} */
 
 static void phpdbg_dump_prototype(zval *tmp) /* {{{ */
 {
-	zval *funcname, *class, class_zv, *type, *args, *argstmp;
+	zval *funcname, *class, class_zv, *args, *argstmp;
 
 	funcname = zend_hash_str_find(Z_ARRVAL_P(tmp), ZEND_STRL("function"));
 
@@ -106,25 +181,19 @@ static void phpdbg_dump_prototype(zval *tmp) /* {{{ */
 	}
 
 	if (class) {
-		type = zend_hash_str_find(Z_ARRVAL_P(tmp), ZEND_STRL("type"));
+		zval *type = zend_hash_str_find(Z_ARRVAL_P(tmp), ZEND_STRL("type"));
+
+		phpdbg_out("%s%s%s(", Z_STRVAL_P(class), Z_STRVAL_P(type), Z_STRVAL_P(funcname));
+	} else {
+		phpdbg_out("%s(", Z_STRVAL_P(funcname));
 	}
 
 	args = zend_hash_str_find(Z_ARRVAL_P(tmp), ZEND_STRL("args"));
 
-	phpdbg_xml(" symbol=\"%s%s%s\"", class ? Z_STRVAL_P(class) : "", class ? Z_STRVAL_P(type) : "", Z_STRVAL_P(funcname));
-
-	if (args) {
-		phpdbg_xml(">");
-	} else {
-		phpdbg_xml(" />");
-	}
-
-	phpdbg_out("%s%s%s(", class ? Z_STRVAL_P(class) : "", class ? Z_STRVAL_P(type) : "", Z_STRVAL_P(funcname));
-
 	if (args) {
 		const zend_function *func = NULL;
 		const zend_arg_info *arginfo = NULL;
-		zend_bool is_variadic = 0;
+		bool is_variadic = 0;
 		int j = 0, m;
 
 		phpdbg_try_access {
@@ -140,28 +209,36 @@ static void phpdbg_dump_prototype(zval *tmp) /* {{{ */
 			if (j) {
 				phpdbg_out(", ");
 			}
-			phpdbg_xml("<arg %r");
 			if (m && j < m) {
-				if (!is_variadic) {
-					is_variadic = arginfo ? arginfo[j].is_variadic : 0;
-				}
-				phpdbg_xml(" variadic=\"%s\" name=\"%s\">", is_variadic ? "variadic" : "", arginfo ? arginfo[j].name : "");
-				phpdbg_out("%s=%s", arginfo ? arginfo[j].name : "?", is_variadic ? "[": "");
+				char *arg_name = NULL;
 
-			} else {
-				phpdbg_xml(">");
+				if (arginfo) {
+					if (func->type == ZEND_INTERNAL_FUNCTION) {
+						arg_name = (char *)((zend_internal_arg_info *)&arginfo[j])->name;
+					} else {
+						arg_name = ZSTR_VAL(arginfo[j].name);
+					}
+				}
+
+				if (!is_variadic) {
+					is_variadic = arginfo ? ZEND_ARG_IS_VARIADIC(&arginfo[j]) : 0;
+				}
+
+				phpdbg_out("%s=%s", arg_name ? arg_name : "?", is_variadic ? "[": "");
+
 			}
 			++j;
 
-			zend_print_flat_zval_r(argstmp);
-
-			phpdbg_xml("</arg>");
+			{
+				char *arg_print = phpdbg_short_zval_print(argstmp, 40);
+				php_printf("%s", arg_print);
+				efree(arg_print);
+			}
 		} ZEND_HASH_FOREACH_END();
 
 		if (is_variadic) {
 			phpdbg_out("]");
 		}
-		phpdbg_xml("</frame>");
 	}
 	phpdbg_out(")");
 }
@@ -171,13 +248,15 @@ void phpdbg_dump_backtrace(size_t num) /* {{{ */
 	HashPosition position;
 	zval zbacktrace;
 	zval *tmp;
-	zval *file, *line;
+	zval startline, startfile;
+	const char *startfilename;
+	zval *file = &startfile, *line = &startline;
 	int i = 0, limit = num;
 
 	PHPDBG_OUTPUT_BACKUP();
 
 	if (limit < 0) {
-		phpdbg_error("backtrace", "type=\"minnum\"", "Invalid backtrace size %d", limit);
+		phpdbg_error("Invalid backtrace size %d", limit);
 
 		PHPDBG_OUTPUT_BACKUP_RESTORE();
 		return;
@@ -186,42 +265,61 @@ void phpdbg_dump_backtrace(size_t num) /* {{{ */
 	phpdbg_try_access {
 		zend_fetch_debug_backtrace(&zbacktrace, 0, 0, limit);
 	} phpdbg_catch_access {
-		phpdbg_error("signalsegv", "", "Couldn't fetch backtrace, invalid data source");
+		phpdbg_error("Couldn't fetch backtrace, invalid data source");
 		return;
 	} phpdbg_end_try_access();
 
-	phpdbg_xml("<backtrace %r>");
+	Z_LVAL(startline) = zend_get_executed_lineno();
+	startfilename = zend_get_executed_filename();
+	Z_STR(startfile) = zend_string_init(startfilename, strlen(startfilename), 0);
 
 	zend_hash_internal_pointer_reset_ex(Z_ARRVAL(zbacktrace), &position);
 	tmp = zend_hash_get_current_data_ex(Z_ARRVAL(zbacktrace), &position);
-	while (1) {
-		file = zend_hash_str_find(Z_ARRVAL_P(tmp), ZEND_STRL("file"));
-		line = zend_hash_str_find(Z_ARRVAL_P(tmp), ZEND_STRL("line"));
-		zend_hash_move_forward_ex(Z_ARRVAL(zbacktrace), &position);
-
-		if (!(tmp = zend_hash_get_current_data_ex(Z_ARRVAL(zbacktrace), &position))) {
-			phpdbg_write("frame", "id=\"%d\" symbol=\"{main}\" file=\"%s\" line=\"%d\"", "frame #%d: {main} at %s:%ld", i, Z_STRVAL_P(file), Z_LVAL_P(line));
-			break;
-		}
-
+	while ((tmp = zend_hash_get_current_data_ex(Z_ARRVAL(zbacktrace), &position))) {
 		if (file) { /* userland */
 			phpdbg_out("frame #%d: ", i);
-			phpdbg_xml("<frame %r id=\"%d\" file=\"%s\" line=\"%d\"", i, Z_STRVAL_P(file), Z_LVAL_P(line));
 			phpdbg_dump_prototype(tmp);
-			phpdbg_out(" at %s:%ld\n", Z_STRVAL_P(file), Z_LVAL_P(line));
+			phpdbg_out(" at %s:"ZEND_LONG_FMT"\n", Z_STRVAL_P(file), Z_LVAL_P(line));
 			i++;
 		} else {
 			phpdbg_out(" => ");
-			phpdbg_xml("<frame %r id=\"%d\" internal=\"internal\"", i);
 			phpdbg_dump_prototype(tmp);
 			phpdbg_out(" (internal function)\n");
 		}
+
+		file = zend_hash_str_find(Z_ARRVAL_P(tmp), ZEND_STRL("file"));
+		line = zend_hash_str_find(Z_ARRVAL_P(tmp), ZEND_STRL("line"));
+		zend_hash_move_forward_ex(Z_ARRVAL(zbacktrace), &position);
 	}
 
-	phpdbg_out("\n");
-	phpdbg_xml("</backtrace>");
+	phpdbg_writeln("frame #%d: {main} at %s:"ZEND_LONG_FMT, i, Z_STRVAL_P(file), Z_LVAL_P(line));
 
-	zval_dtor(&zbacktrace);
+	zval_ptr_dtor_nogc(&zbacktrace);
+	zend_string_release(Z_STR(startfile));
 
 	PHPDBG_OUTPUT_BACKUP_RESTORE();
 } /* }}} */
+
+void phpdbg_open_generator_frame(zend_generator *gen) {
+	zend_string *s;
+
+	if (EG(current_execute_data) == gen->execute_data) {
+		return;
+	}
+
+	phpdbg_restore_frame();
+
+	PHPDBG_FRAME(num) = -1;
+	PHPDBG_FRAME(generator) = gen;
+
+	EG(current_execute_data) = gen->execute_data;
+	if (gen->frozen_call_stack) {
+		zend_generator_restore_call_stack(gen);
+	}
+	gen->execute_data->prev_execute_data = NULL;
+
+	s = phpdbg_compile_stackframe(EG(current_execute_data));
+	phpdbg_notice("Switched to generator with handle #%d: %.*s", gen->std.handle, (int) ZSTR_LEN(s), ZSTR_VAL(s));
+	zend_string_release(s);
+	phpdbg_print_cur_frame_info();
+}

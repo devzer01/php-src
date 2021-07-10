@@ -1,12 +1,11 @@
 --TEST--
 SQLite
---SKIPIF--
-<?php # vim:ft=php
-if (!extension_loaded('pdo_sqlite')) print 'skip'; ?>
+--EXTENSIONS--
+pdo_sqlite
 --REDIRECTTEST--
 return array(
 	'ENV' => array(
 			'PDOTEST_DSN' => 'sqlite::memory:'
 		),
-	'TESTS' => 'ext/pdo/tests'
+	'TESTS' => __DIR__ . '/ext/pdo/tests'
 	);

@@ -1,9 +1,7 @@
 --TEST--
 Crash when calling a method of a class that inherits PDOStatement
---SKIPIF--
-<?php
-if (!extension_loaded('pdo')) die('skip');
-?>
+--EXTENSIONS--
+pdo
 --FILE--
 <?php
 
@@ -16,4 +14,7 @@ var_dump($obj->foo());
 
 ?>
 --EXPECTF--
-Fatal error: Call to undefined method MyStatement::foo() in %s on line %d
+Fatal error: Uncaught Error: Call to undefined method MyStatement::foo() in %s:%d
+Stack trace:
+#0 {main}
+  thrown in %s on line %d

@@ -1,13 +1,11 @@
 /*
    +----------------------------------------------------------------------+
-   | PHP Version 7                                                        |
-   +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2015 The PHP Group                                |
+   | Copyright (c) The PHP Group                                          |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
    | available through the world-wide-web at the following url:           |
-   | http://www.php.net/license/3_01.txt                                  |
+   | https://www.php.net/license/3_01.txt                                 |
    | If you did not receive a copy of the PHP license and are unable to   |
    | obtain it through the world-wide-web, please send a note to          |
    | license@php.net so we can mail you a copy immediately.               |
@@ -15,8 +13,6 @@
    | Author: Kirill Maximov <kir@actimind.com>                            |
    +----------------------------------------------------------------------+
  */
-
-/* $Id$ */
 
 #include <stdlib.h>
 
@@ -53,10 +49,10 @@ static char php_hex2int(int c) /* {{{ */
 
 PHPAPI zend_string *php_quot_print_decode(const unsigned char *str, size_t length, int replace_us_by_ws) /* {{{ */
 {
-	register size_t i;
-	register unsigned const char *p1;
-	register unsigned char *p2;
-	register unsigned int h_nbl, l_nbl;
+	size_t i;
+	unsigned const char *p1;
+	unsigned char *p2;
+	unsigned int h_nbl, l_nbl;
 
 	size_t decoded_len, buf_size;
 	zend_string *retval;
@@ -97,7 +93,7 @@ PHPAPI zend_string *php_quot_print_decode(const unsigned char *str, size_t lengt
 	}
 
 	retval = zend_string_alloc(buf_size, 0);
-	i = length; p1 = str; p2 = (unsigned char*)retval->val;
+	i = length; p1 = str; p2 = (unsigned char*)ZSTR_VAL(retval);
 	decoded_len = 0;
 
 	while (i > 0 && *p1 != '\0') {
@@ -138,7 +134,7 @@ PHPAPI zend_string *php_quot_print_decode(const unsigned char *str, size_t lengt
 	}
 
 	*p2 = '\0';
-	retval->len = decoded_len;
+	ZSTR_LEN(retval) = decoded_len;
 	return retval;
 }
 /* }}} */
@@ -153,7 +149,7 @@ PHPAPI zend_string *php_quot_print_encode(const unsigned char *str, size_t lengt
 	zend_string *ret;
 
 	ret = zend_string_safe_alloc(3, (length + (((3 * length)/(PHP_QPRINT_MAXL-9)) + 1)), 0, 0);
-	d = (unsigned char*)ret->val;
+	d = (unsigned char*)ZSTR_VAL(ret);
 
 	while (length--) {
 		if (((c = *str++) == '\015') && (*str == '\012') && length > 0) {
@@ -164,9 +160,9 @@ PHPAPI zend_string *php_quot_print_encode(const unsigned char *str, size_t lengt
 		} else {
 			if (iscntrl (c) || (c == 0x7f) || (c & 0x80) || (c == '=') || ((c == ' ') && (*str == '\015'))) {
 				if ((((lp+= 3) > PHP_QPRINT_MAXL) && (c <= 0x7f))
-            || ((c > 0x7f) && (c <= 0xdf) && ((lp + 3) > PHP_QPRINT_MAXL))
-            || ((c > 0xdf) && (c <= 0xef) && ((lp + 6) > PHP_QPRINT_MAXL))
-            || ((c > 0xef) && (c <= 0xf4) && ((lp + 9) > PHP_QPRINT_MAXL))) {
+				    || ((c > 0x7f) && (c <= 0xdf) && ((lp + 3) > PHP_QPRINT_MAXL))
+				    || ((c > 0xdf) && (c <= 0xef) && ((lp + 6) > PHP_QPRINT_MAXL))
+				    || ((c > 0xef) && (c <= 0xf4) && ((lp + 9) > PHP_QPRINT_MAXL))) {
 					*d++ = '=';
 					*d++ = '\015';
 					*d++ = '\012';
@@ -187,7 +183,7 @@ PHPAPI zend_string *php_quot_print_encode(const unsigned char *str, size_t lengt
 		}
 	}
 	*d = '\0';
-	ret = zend_string_realloc(ret, d - (unsigned char*)ret->val, 0);
+	ret = zend_string_truncate(ret, d - (unsigned char*)ZSTR_VAL(ret), 0);
 	return ret;
 }
 /* }}} */
@@ -197,8 +193,7 @@ PHPAPI zend_string *php_quot_print_encode(const unsigned char *str, size_t lengt
 * Decoding  Quoted-printable string.
 *
 */
-/* {{{ proto string quoted_printable_decode(string str)
-   Convert a quoted-printable string to an 8 bit string */
+/* {{{ Convert a quoted-printable string to an 8 bit string */
 PHP_FUNCTION(quoted_printable_decode)
 {
 	zend_string *arg1;
@@ -206,17 +201,17 @@ PHP_FUNCTION(quoted_printable_decode)
 	zend_string *str_out;
 	size_t i = 0, j = 0, k;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "S", &arg1) == FAILURE) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_STR(arg1)
+	ZEND_PARSE_PARAMETERS_END();
 
-	if (arg1->len == 0) {
+	if (ZSTR_LEN(arg1) == 0) {
 		/* shortcut */
 		RETURN_EMPTY_STRING();
 	}
 
-	str_in = arg1->val;
-	str_out = zend_string_alloc(arg1->len, 0);
+	str_in = ZSTR_VAL(arg1);
+	str_out = zend_string_alloc(ZSTR_LEN(arg1), 0);
 	while (str_in[i]) {
 		switch (str_in[i]) {
 		case '=':
@@ -224,7 +219,7 @@ PHP_FUNCTION(quoted_printable_decode)
 				isxdigit((int) str_in[i + 1]) &&
 				isxdigit((int) str_in[i + 2]))
 			{
-				str_out->val[j++] = (php_hex2int((int) str_in[i + 1]) << 4)
+				ZSTR_VAL(str_out)[j++] = (php_hex2int((int) str_in[i + 1]) << 4)
 						+ php_hex2int((int) str_in[i + 2]);
 				i += 3;
 			} else  /* check for soft line break according to RFC 2045*/ {
@@ -246,45 +241,36 @@ PHP_FUNCTION(quoted_printable_decode)
 					i += k + 1;
 				}
 				else {
-					str_out->val[j++] = str_in[i++];
+					ZSTR_VAL(str_out)[j++] = str_in[i++];
 				}
 			}
 			break;
 		default:
-			str_out->val[j++] = str_in[i++];
+			ZSTR_VAL(str_out)[j++] = str_in[i++];
 		}
 	}
-	str_out->val[j] = '\0';
-	str_out->len = j;
+	ZSTR_VAL(str_out)[j] = '\0';
+	ZSTR_LEN(str_out) = j;
 
 	RETVAL_NEW_STR(str_out);
 }
 /* }}} */
 
-/* {{{ proto string quoted_printable_encode(string str) */
+/* {{{ */
 PHP_FUNCTION(quoted_printable_encode)
 {
 	zend_string *str;
 	zend_string *new_str;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "S", &str) != SUCCESS) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_STR(str)
+	ZEND_PARSE_PARAMETERS_END();
 
-	if (!str->len) {
+	if (!ZSTR_LEN(str)) {
 		RETURN_EMPTY_STRING();
 	}
 
-	new_str = php_quot_print_encode((unsigned char *)str->val, (size_t)str->len);
+	new_str = php_quot_print_encode((unsigned char *)ZSTR_VAL(str), ZSTR_LEN(str));
 	RETURN_STR(new_str);
 }
 /* }}} */
-
-/*
- * Local variables:
- * tab-width: 4
- * c-basic-offset: 4
- * End:
- * vim600: sw=4 ts=4 fdm=marker
- * vim<600: sw=4 ts=4
- */

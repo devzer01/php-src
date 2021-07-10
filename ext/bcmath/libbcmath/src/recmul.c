@@ -11,7 +11,7 @@
     This library is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Lesser General Public License for more details.  (COPYING.LIB)
+    Lesser General Public License for more details.  (LICENSE)
 
     You should have received a copy of the GNU Lesser General Public
     License along with this library; if not, write to:
@@ -50,24 +50,12 @@ int mul_base_digits = MUL_BASE_DIGITS;
 
 /* Multiply utility routines */
 
-static bc_num
-new_sub_num (length, scale, value)
-     int length, scale;
-     char *value;
+static bc_num new_sub_num(int length, int scale, char *value)
 {
   bc_num temp;
 
-#ifdef SANDER_0
-  if (_bc_Free_list != NULL) {
-    temp = _bc_Free_list;
-    _bc_Free_list = temp->n_next;
-  } else {
-#endif
-    temp = (bc_num) emalloc (sizeof(bc_struct));
-#ifdef SANDER_0
-    if (temp == NULL) bc_out_of_memory ();
-  }
-#endif
+  temp = (bc_num) emalloc (sizeof(bc_struct));
+
   temp->n_sign = PLUS;
   temp->n_len = length;
   temp->n_scale = scale;

@@ -1,5 +1,7 @@
 --TEST--
 Test session_start() function : variation
+--EXTENSIONS--
+session
 --SKIPIF--
 <?php include('skipif.inc'); ?>
 --INI--
@@ -8,12 +10,6 @@ session.auto_start=1
 <?php
 
 ob_start();
-
-/* 
- * Prototype : bool session_start(void)
- * Description : Initialize session data
- * Source code : ext/session/session.c 
- */
 
 echo "*** Testing session_start() : variation ***\n";
 
@@ -30,10 +26,9 @@ ob_end_flush();
 *** Testing session_start() : variation ***
 string(%d) "%s"
 
-Notice: A session had already been started - ignoring session_start() in %s on line %d
+Notice: session_start(): Ignoring session_start() because a session is already active in %s on line %d
 bool(true)
 string(%d) "%s"
 bool(true)
 string(0) ""
 Done
-

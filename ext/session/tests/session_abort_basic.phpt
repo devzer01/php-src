@@ -1,20 +1,17 @@
 --TEST--
 Test session_abort() function : basic functionality
+--EXTENSIONS--
+session
 --SKIPIF--
 <?php include('skipif.inc'); ?>
 --INI--
 session.save_path=
 session.name=PHPSESSID
+session.save_handler=files
 --FILE--
 <?php
 
 ob_start();
-
-/*
- * Prototype : void session_abort(void)
- * Description : Should abort session. Session data should not be written.
- * Source code : ext/session/session.c
- */
 
 echo "*** Testing session_abort() : basic functionality ***\n";
 
@@ -36,7 +33,7 @@ var_dump($_SESSION); // Should only have 'foo'
 echo "Done".PHP_EOL;
 
 ?>
---EXPECTF--
+--EXPECT--
 *** Testing session_abort() : basic functionality ***
 array(2) {
   ["foo"]=>

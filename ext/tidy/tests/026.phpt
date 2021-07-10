@@ -1,7 +1,7 @@
 --TEST--
 tidy.clean_output test
---SKIPIF--
-<?php if (!extension_loaded('tidy')) die('skip'); ?>
+--EXTENSIONS--
+tidy
 --INI--
 tidy.clean_output=1
 --FILE--
@@ -12,8 +12,8 @@ echo '<p>xpto</p>';
 
 ?>
 </html>
---EXPECT--
-<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 3.2//EN">
+--EXPECTF--
+<!DOCTYPE html%S>
 <html>
 <head>
 <title></title>

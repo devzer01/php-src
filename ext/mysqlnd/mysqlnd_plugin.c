@@ -1,24 +1,20 @@
 /*
   +----------------------------------------------------------------------+
-  | PHP Version 7                                                        |
-  +----------------------------------------------------------------------+
-  | Copyright (c) 2006-2015 The PHP Group                                |
+  | Copyright (c) The PHP Group                                          |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
   | available through the world-wide-web at the following url:           |
-  | http://www.php.net/license/3_01.txt                                  |
+  | https://www.php.net/license/3_01.txt                                 |
   | If you did not receive a copy of the PHP license and are unable to   |
   | obtain it through the world-wide-web, please send a note to          |
   | license@php.net so we can mail you a copy immediately.               |
   +----------------------------------------------------------------------+
-  | Authors: Andrey Hristov <andrey@mysql.com>                           |
-  |          Ulf Wendel <uwendel@mysql.com>                              |
-  |          Georg Richter <georg@mysql.com>                             |
+  | Authors: Andrey Hristov <andrey@php.net>                             |
+  |          Ulf Wendel <uw@php.net>                                     |
   +----------------------------------------------------------------------+
 */
 
-/* $Id: mysqlnd.c 306407 2010-12-16 12:56:19Z andrey $ */
 #include "php.h"
 #include "mysqlnd.h"
 #include "mysqlnd_priv.h"
@@ -26,7 +22,7 @@
 #include "mysqlnd_debug.h"
 
 /*--------------------------------------------------------------------*/
-#if defined(MYSQLND_DBG_ENABLED) && MYSQLND_DBG_ENABLED == 1
+#if MYSQLND_DBG_ENABLED == 1
 static enum_func_status mysqlnd_example_plugin_end(void * p);
 
 static MYSQLND_STATS * mysqlnd_plugin_example_stats = NULL;
@@ -62,6 +58,7 @@ static struct st_mysqlnd_typeii_plugin_example mysqlnd_example_plugin =
 		}
 	},
 	NULL,	/* methods */
+	0
 };
 
 
@@ -71,7 +68,7 @@ enum_func_status mysqlnd_example_plugin_end(void * p)
 {
 	struct st_mysqlnd_typeii_plugin_example * plugin = (struct st_mysqlnd_typeii_plugin_example *) p;
 	DBG_ENTER("mysqlnd_example_plugin_end");
-	mysqlnd_stats_end(plugin->plugin_header.plugin_stats.values);
+	mysqlnd_stats_end(plugin->plugin_header.plugin_stats.values, 1);
 	plugin->plugin_header.plugin_stats.values = NULL;
 	DBG_RETURN(PASS);
 }
@@ -82,12 +79,12 @@ enum_func_status mysqlnd_example_plugin_end(void * p)
 void
 mysqlnd_example_plugin_register(void)
 {
-	mysqlnd_stats_init(&mysqlnd_plugin_example_stats, EXAMPLE_STAT_LAST);
+	mysqlnd_stats_init(&mysqlnd_plugin_example_stats, EXAMPLE_STAT_LAST, 1);
 	mysqlnd_example_plugin.plugin_header.plugin_stats.values = mysqlnd_plugin_example_stats;
 	mysqlnd_plugin_register_ex((struct st_mysqlnd_plugin_header *) &mysqlnd_example_plugin);
 }
 /* }}} */
-#endif /* defined(MYSQLND_DBG_ENABLED) && MYSQLND_DBG_ENABLED == 1 */
+#endif /* MYSQLND_DBG_ENABLED == 1 */
 /*--------------------------------------------------------------------*/
 
 static HashTable mysqlnd_registered_plugins;
@@ -128,7 +125,7 @@ mysqlnd_plugin_subsystem_end(void)
 
 
 /* {{{ mysqlnd_plugin_register */
-PHPAPI unsigned int mysqlnd_plugin_register()
+PHPAPI unsigned int mysqlnd_plugin_register(void)
 {
 	return mysqlnd_plugin_register_ex(NULL);
 }
@@ -153,25 +150,20 @@ PHPAPI unsigned int mysqlnd_plugin_register_ex(struct st_mysqlnd_plugin_header *
 
 
 /* {{{ mysqlnd_plugin_find */
-PHPAPI void * _mysqlnd_plugin_find(const char * const name)
+PHPAPI void * mysqlnd_plugin_find(const char * const name)
 {
 	void * plugin;
 	if ((plugin = zend_hash_str_find_ptr(&mysqlnd_registered_plugins, name, strlen(name))) != NULL) {
 		return plugin;
 	}
 	return NULL;
-
 }
 /* }}} */
 
 
-/* {{{ _mysqlnd_plugin_apply_with_argument */
-PHPAPI void _mysqlnd_plugin_apply_with_argument(apply_func_arg_t apply_func, void * argument)
+/* {{{ mysqlnd_plugin_apply_with_argument */
+PHPAPI void mysqlnd_plugin_apply_with_argument(apply_func_arg_t apply_func, void * argument)
 {
-	/* Note: We want to be thread-safe (read-only), so we can use neither
-	 * zend_hash_apply_with_argument nor zend_hash_internal_pointer_reset and
-	 * friends
-	 */
 	zval *val;
 	int result;
 
@@ -189,18 +181,8 @@ PHPAPI void _mysqlnd_plugin_apply_with_argument(apply_func_arg_t apply_func, voi
 
 
 /* {{{ mysqlnd_plugin_count */
-PHPAPI unsigned int mysqlnd_plugin_count()
+PHPAPI unsigned int mysqlnd_plugin_count(void)
 {
 	return mysqlnd_plugins_counter;
 }
 /* }}} */
-
-
-/*
- * Local variables:
- * tab-width: 4
- * c-basic-offset: 4
- * End:
- * vim600: noet sw=4 ts=4 fdm=marker
- * vim<600: noet sw=4 ts=4
- */

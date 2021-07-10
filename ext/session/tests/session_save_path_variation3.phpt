@@ -1,5 +1,7 @@
 --TEST--
 Test session_save_path() function : variation
+--EXTENSIONS--
+session
 --SKIPIF--
 <?php include('skipif.inc'); ?>
 --INI--
@@ -9,12 +11,6 @@ session.gc_probability=0
 <?php
 
 ob_start();
-
-/* 
- * Prototype : string session_save_path([string $path])
- * Description : Get and/or set the current session save path
- * Source code : ext/session/session.c 
- */
 
 echo "*** Testing session_save_path() : variation ***\n";
 
@@ -33,8 +29,12 @@ ob_end_flush();
 string(5) "/blah"
 
 Warning: session_start(): open(%s, O_RDWR) failed: No such file or directory (2) in %s on line %d
-bool(true)
+
+Warning: session_start(): Failed to read session data: files (path: %sblah) in %s on line %d
+bool(false)
 string(5) "/blah"
-bool(true)
+
+Warning: session_destroy(): Trying to destroy uninitialized session in %s on line %d
+bool(false)
 string(5) "/blah"
 Done

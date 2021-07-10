@@ -1,13 +1,11 @@
 /*
    +----------------------------------------------------------------------+
-   | PHP Version 7                                                        |
-   +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2015 The PHP Group                                |
+   | Copyright (c) The PHP Group                                          |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
    | available through the world-wide-web at the following url:           |
-   | http://www.php.net/license/3_01.txt                                  |
+   | https://www.php.net/license/3_01.txt                                 |
    | If you did not receive a copy of the PHP license and are unable to   |
    | obtain it through the world-wide-web, please send a note to          |
    | license@php.net so we can mail you a copy immediately.               |
@@ -16,12 +14,12 @@
    +----------------------------------------------------------------------+
 */
 
-/* $Id$ */
-
 #ifndef PHP_WIN32_GLOBALS_H
 #define PHP_WIN32_GLOBALS_H
 
 /* misc globals for thread-safety under win32 */
+
+#include "win32/sendmail.h"
 
 typedef struct _php_win32_core_globals php_win32_core_globals;
 
@@ -41,6 +39,11 @@ struct _php_win32_core_globals {
 	HKEY       registry_key;
 	HANDLE     registry_event;
 	HashTable *registry_directories;
+
+	char   mail_buffer[MAIL_BUFFER_SIZE];
+	SOCKET mail_socket;
+	char   mail_host[HOST_NAME_LEN];
+	char   mail_local_host[HOST_NAME_LEN];
 };
 
 void php_win32_core_globals_ctor(void *vg);
@@ -48,4 +51,3 @@ void php_win32_core_globals_dtor(void *vg);
 PHP_RSHUTDOWN_FUNCTION(win32_core_globals);
 
 #endif
-

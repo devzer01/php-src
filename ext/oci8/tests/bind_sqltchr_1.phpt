@@ -1,11 +1,11 @@
 --TEST--
 Bind with SQLT_CHR
---SKIPIF--
-<?php if (!extension_loaded('oci8')) die ("skip no oci8 extension"); ?>
+--EXTENSIONS--
+oci8
 --FILE--
 <?php
 
-require(dirname(__FILE__).'/connect.inc');
+require(__DIR__.'/connect.inc');
 
 // Initialization
 
@@ -133,9 +133,7 @@ $stmtarray = array(
 oci8_test_sql_execute($c, $stmtarray);
 
 ?>
-===DONE===
-<?php exit(0); ?>
---EXPECTF--
+--EXPECT--
 TEST241 bind SQLT_CHR
 array(1) {
   ["VARCHAR2_T10"]=>
@@ -225,4 +223,3 @@ array(1) {
     NULL
   }
 }
-===DONE===

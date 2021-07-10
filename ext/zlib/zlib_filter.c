@@ -1,13 +1,11 @@
 /*
    +----------------------------------------------------------------------+
-   | PHP Version 7                                                        |
-   +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2015 The PHP Group                                |
+   | Copyright (c) The PHP Group                                          |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
    | available through the world-wide-web at the following url:           |
-   | http://www.php.net/license/3_01.txt                                  |
+   | https://www.php.net/license/3_01.txt                                 |
    | If you did not receive a copy of the PHP license and are unable to   |
    | obtain it through the world-wide-web, please send a note to          |
    | license@php.net so we can mail you a copy immediately.               |
@@ -15,8 +13,6 @@
    | Authors: Sara Golemon (pollita@php.net)                              |
    +----------------------------------------------------------------------+
 */
-
-/* $Id$ */
 
 #include "php.h"
 #include "php_zlib.h"
@@ -26,12 +22,12 @@
 /* Passed as opaque in malloc callbacks */
 typedef struct _php_zlib_filter_data {
 	z_stream strm;
-	char *inbuf;
+	unsigned char *inbuf;
 	size_t inbuf_len;
-	char *outbuf;
+	unsigned char *outbuf;
 	size_t outbuf_len;
 	int persistent;
-	zend_bool finished;
+	bool finished; /* for zlib.deflate: signals that no flush is pending */
 } php_zlib_filter_data;
 
 /* }}} */
@@ -78,12 +74,7 @@ static php_stream_filter_status_t php_zlib_inflate_filter(
 
 		bucket = php_stream_bucket_make_writeable(buckets_in->head);
 
-		while (bin < (unsigned int) bucket->buflen) {
-
-			if (data->finished) {
-				consumed += bucket->buflen;
-				break;
-			}
+		while (bin < (unsigned int) bucket->buflen && !data->finished) {
 
 			desired = bucket->buflen - bin;
 			if (desired > data->inbuf_len) {
@@ -96,8 +87,10 @@ static php_stream_filter_status_t php_zlib_inflate_filter(
 			if (status == Z_STREAM_END) {
 				inflateEnd(&(data->strm));
 				data->finished = '\1';
-			} else if (status != Z_OK) {
+				exit_status = PSFS_PASS_ON;
+			} else if (status != Z_OK && status != Z_BUF_ERROR) {
 				/* Something bad happened */
+				php_error_docref(NULL, E_NOTICE, "zlib: %s", zError(status));
 				php_stream_bucket_delref(bucket);
 				/* reset these because despite the error the filter may be used again */
 				data->strm.next_in = data->inbuf;
@@ -112,15 +105,12 @@ static php_stream_filter_status_t php_zlib_inflate_filter(
 			if (data->strm.avail_out < data->outbuf_len) {
 				php_stream_bucket *out_bucket;
 				size_t bucketlen = data->outbuf_len - data->strm.avail_out;
-				out_bucket = php_stream_bucket_new(stream, estrndup(data->outbuf, bucketlen), bucketlen, 1, 0);
+				out_bucket = php_stream_bucket_new(
+					stream, estrndup((char *) data->outbuf, bucketlen), bucketlen, 1, 0);
 				php_stream_bucket_append(buckets_out, out_bucket);
 				data->strm.avail_out = data->outbuf_len;
 				data->strm.next_out = data->outbuf;
 				exit_status = PSFS_PASS_ON;
-			} else if (status == Z_STREAM_END && data->strm.avail_out >= data->outbuf_len) {
-				/* no more data to decompress, and nothing was spat out */
-				php_stream_bucket_delref(bucket);
-				return PSFS_PASS_ON;
 			}
 
 		}
@@ -136,7 +126,8 @@ static php_stream_filter_status_t php_zlib_inflate_filter(
 			if (data->strm.avail_out < data->outbuf_len) {
 				size_t bucketlen = data->outbuf_len - data->strm.avail_out;
 
-				bucket = php_stream_bucket_new(stream, estrndup(data->outbuf, bucketlen), bucketlen, 1, 0);
+				bucket = php_stream_bucket_new(
+					stream, estrndup((char *) data->outbuf, bucketlen), bucketlen, 1, 0);
 				php_stream_bucket_append(buckets_out, bucket);
 				data->strm.avail_out = data->outbuf_len;
 				data->strm.next_out = data->outbuf;
@@ -165,14 +156,14 @@ static void php_zlib_inflate_dtor(php_stream_filter *thisfilter)
 	}
 }
 
-static php_stream_filter_ops php_zlib_inflate_ops = {
+static const php_stream_filter_ops php_zlib_inflate_ops = {
 	php_zlib_inflate_filter,
 	php_zlib_inflate_dtor,
 	"zlib.inflate"
 };
 /* }}} */
 
-/* {{{ zlib.inflate filter implementation */
+/* {{{ zlib.deflate filter implementation */
 
 static php_stream_filter_status_t php_zlib_deflate_filter(
 	php_stream *stream,
@@ -204,6 +195,8 @@ static php_stream_filter_status_t php_zlib_deflate_filter(
 		bucket = php_stream_bucket_make_writeable(bucket);
 
 		while (bin < (unsigned int) bucket->buflen) {
+			int flush_mode;
+
 			desired = bucket->buflen - bin;
 			if (desired > data->inbuf_len) {
 				desired = data->inbuf_len;
@@ -211,7 +204,9 @@ static php_stream_filter_status_t php_zlib_deflate_filter(
 			memcpy(data->strm.next_in, bucket->buf + bin, desired);
 			data->strm.avail_in = desired;
 
-			status = deflate(&(data->strm), flags & PSFS_FLAG_FLUSH_CLOSE ? Z_FULL_FLUSH : (flags & PSFS_FLAG_FLUSH_INC ? Z_SYNC_FLUSH : Z_NO_FLUSH));
+			flush_mode = flags & PSFS_FLAG_FLUSH_CLOSE ? Z_FULL_FLUSH : (flags & PSFS_FLAG_FLUSH_INC ? Z_SYNC_FLUSH : Z_NO_FLUSH);
+			data->finished = flush_mode != Z_NO_FLUSH;
+			status = deflate(&(data->strm), flush_mode);
 			if (status != Z_OK) {
 				/* Something bad happened */
 				php_stream_bucket_delref(bucket);
@@ -226,7 +221,8 @@ static php_stream_filter_status_t php_zlib_deflate_filter(
 				php_stream_bucket *out_bucket;
 				size_t bucketlen = data->outbuf_len - data->strm.avail_out;
 
-				out_bucket = php_stream_bucket_new(stream, estrndup(data->outbuf, bucketlen), bucketlen, 1, 0);
+				out_bucket = php_stream_bucket_new(
+					stream, estrndup((char *) data->outbuf, bucketlen), bucketlen, 1, 0);
 				php_stream_bucket_append(buckets_out, out_bucket);
 				data->strm.avail_out = data->outbuf_len;
 				data->strm.next_out = data->outbuf;
@@ -237,15 +233,17 @@ static php_stream_filter_status_t php_zlib_deflate_filter(
 		php_stream_bucket_delref(bucket);
 	}
 
-	if (flags & PSFS_FLAG_FLUSH_CLOSE) {
+	if (flags & PSFS_FLAG_FLUSH_CLOSE || ((flags & PSFS_FLAG_FLUSH_INC) && !data->finished)) {
 		/* Spit it out! */
 		status = Z_OK;
 		while (status == Z_OK) {
-			status = deflate(&(data->strm), Z_FINISH);
+			status = deflate(&(data->strm), (flags & PSFS_FLAG_FLUSH_CLOSE ? Z_FINISH : Z_SYNC_FLUSH));
+			data->finished = 1;
 			if (data->strm.avail_out < data->outbuf_len) {
 				size_t bucketlen = data->outbuf_len - data->strm.avail_out;
 
-				bucket = php_stream_bucket_new(stream, estrndup(data->outbuf, bucketlen), bucketlen, 1, 0);
+				bucket = php_stream_bucket_new(
+					stream, estrndup((char *) data->outbuf, bucketlen), bucketlen, 1, 0);
 				php_stream_bucket_append(buckets_out, bucket);
 				data->strm.avail_out = data->outbuf_len;
 				data->strm.next_out = data->outbuf;
@@ -272,7 +270,7 @@ static void php_zlib_deflate_dtor(php_stream_filter *thisfilter)
 	}
 }
 
-static php_stream_filter_ops php_zlib_deflate_ops = {
+static const php_stream_filter_ops php_zlib_deflate_ops = {
 	php_zlib_deflate_filter,
 	php_zlib_deflate_dtor,
 	"zlib.deflate"
@@ -282,9 +280,9 @@ static php_stream_filter_ops php_zlib_deflate_ops = {
 
 /* {{{ zlib.* common factory */
 
-static php_stream_filter *php_zlib_filter_create(const char *filtername, zval *filterparams, int persistent)
+static php_stream_filter *php_zlib_filter_create(const char *filtername, zval *filterparams, uint8_t persistent)
 {
-	php_stream_filter_ops *fops = NULL;
+	const php_stream_filter_ops *fops = NULL;
 	php_zlib_filter_data *data;
 	int status;
 
@@ -326,15 +324,12 @@ static php_stream_filter *php_zlib_filter_create(const char *filtername, zval *f
 
 			if ((Z_TYPE_P(filterparams) == IS_ARRAY || Z_TYPE_P(filterparams) == IS_OBJECT) &&
 				(tmpzval = zend_hash_str_find(HASH_OF(filterparams), "window", sizeof("window") - 1))) {
-				zval tmp;
-
 				/* log-2 base of history window (9 - 15) */
-				ZVAL_DUP(&tmp, tmpzval);
-				convert_to_long(&tmp);
-				if (Z_LVAL(tmp) < -MAX_WBITS || Z_LVAL(tmp) > MAX_WBITS + 32) {
-					php_error_docref(NULL, E_WARNING, "Invalid parameter give for window size. (%pd)", Z_LVAL(tmp));
+				zend_long tmp = zval_get_long(tmpzval);
+				if (tmp < -MAX_WBITS || tmp > MAX_WBITS + 32) {
+					php_error_docref(NULL, E_WARNING, "Invalid parameter give for window size. (" ZEND_LONG_FMT ")", tmp);
 				} else {
-					windowBits = Z_LVAL(tmp);
+					windowBits = tmp;
 				}
 			}
 		}
@@ -351,7 +346,8 @@ static php_stream_filter *php_zlib_filter_create(const char *filtername, zval *f
 
 
 		if (filterparams) {
-			zval *tmpzval, tmp;
+			zval *tmpzval;
+			zend_long tmp;
 
 			/* filterparams can either be a scalar value to indicate compression level (shortcut method)
                Or can be a hash containing one or more of 'window', 'memory', and/or 'level' members. */
@@ -360,31 +356,27 @@ static php_stream_filter *php_zlib_filter_create(const char *filtername, zval *f
 				case IS_ARRAY:
 				case IS_OBJECT:
 					if ((tmpzval = zend_hash_str_find(HASH_OF(filterparams), "memory", sizeof("memory") -1))) {
-						ZVAL_DUP(&tmp, tmpzval);
-						convert_to_long(&tmp);
-
 						/* Memory Level (1 - 9) */
-						if (Z_LVAL(tmp) < 1 || Z_LVAL(tmp) > MAX_MEM_LEVEL) {
-							php_error_docref(NULL, E_WARNING, "Invalid parameter give for memory level. (%pd)", Z_LVAL(tmp));
+						tmp = zval_get_long(tmpzval);
+						if (tmp < 1 || tmp > MAX_MEM_LEVEL) {
+							php_error_docref(NULL, E_WARNING, "Invalid parameter give for memory level. (" ZEND_LONG_FMT ")", tmp);
 						} else {
-							memLevel = Z_LVAL(tmp);
+							memLevel = tmp;
 						}
 					}
 
 					if ((tmpzval = zend_hash_str_find(HASH_OF(filterparams), "window", sizeof("window") - 1))) {
-						ZVAL_DUP(&tmp, tmpzval);
-						convert_to_long(&tmp);
-
 						/* log-2 base of history window (9 - 15) */
-						if (Z_LVAL(tmp) < -MAX_WBITS || Z_LVAL(tmp) > MAX_WBITS + 16) {
-							php_error_docref(NULL, E_WARNING, "Invalid parameter give for window size. (%pd)", Z_LVAL(tmp));
+						tmp = zval_get_long(tmpzval);
+						if (tmp < -MAX_WBITS || tmp > MAX_WBITS + 16) {
+							php_error_docref(NULL, E_WARNING, "Invalid parameter give for window size. (" ZEND_LONG_FMT ")", tmp);
 						} else {
-							windowBits = Z_LVAL(tmp);
+							windowBits = tmp;
 						}
 					}
 
 					if ((tmpzval = zend_hash_str_find(HASH_OF(filterparams), "level", sizeof("level") - 1))) {
-						ZVAL_COPY_VALUE(&tmp, tmpzval);
+						tmp = zval_get_long(tmpzval);
 
 						/* Pseudo pass through to catch level validating code */
 						goto factory_setlevel;
@@ -393,16 +385,13 @@ static php_stream_filter *php_zlib_filter_create(const char *filtername, zval *f
 				case IS_STRING:
 				case IS_DOUBLE:
 				case IS_LONG:
-					ZVAL_COPY_VALUE(&tmp, filterparams);
+					tmp = zval_get_long(filterparams);
 factory_setlevel:
-					zval_copy_ctor(&tmp);
-					convert_to_long(&tmp);
-
 					/* Set compression level within reason (-1 == default, 0 == none, 1-9 == least to most compression */
-					if (Z_LVAL(tmp) < -1 || Z_LVAL(tmp) > 9) {
-						php_error_docref(NULL, E_WARNING, "Invalid compression level specified. (%pd)", Z_LVAL(tmp));
+					if (tmp < -1 || tmp > 9) {
+						php_error_docref(NULL, E_WARNING, "Invalid compression level specified. (" ZEND_LONG_FMT ")", tmp);
 					} else {
-						level = Z_LVAL(tmp);
+						level = tmp;
 					}
 					break;
 				default:
@@ -410,6 +399,7 @@ factory_setlevel:
 			}
 		}
 		status = deflateInit2(&(data->strm), level, Z_DEFLATED, windowBits, memLevel, 0);
+		data->finished = 1;
 		fops = &php_zlib_deflate_ops;
 	} else {
 		status = Z_DATA_ERROR;
@@ -426,16 +416,7 @@ factory_setlevel:
 	return php_stream_filter_alloc(fops, data, persistent);
 }
 
-php_stream_filter_factory php_zlib_filter_factory = {
+const php_stream_filter_factory php_zlib_filter_factory = {
 	php_zlib_filter_create
 };
 /* }}} */
-
-/*
- * Local variables:
- * tab-width: 4
- * c-basic-offset: 4
- * End:
- * vim600: sw=4 ts=4 fdm=marker
- * vim<600: sw=4 ts=4
- */

@@ -1,12 +1,10 @@
 --TEST--
 Test function readgzfile() reading a plain relative file
---SKIPIF--
-<?php
-if (!extension_loaded('zlib')) die ('skip zlib extension not available in this build');
-?>
+--EXTENSIONS--
+zlib
 --FILE--
 <?php
-$plaintxt = b<<<EOT
+$plaintxt = <<<EOT
 hello world
 is a very common test
 for all languages
@@ -25,10 +23,8 @@ var_dump(readgzfile( $filename ) );
 unlink($filename);
 rmdir($dirname);
 ?>
-===DONE===
 --EXPECT--
 hello world
 is a very common test
 for all languages
 int(52)
-===DONE===

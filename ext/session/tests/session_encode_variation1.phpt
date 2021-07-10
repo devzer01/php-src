@@ -1,17 +1,13 @@
 --TEST--
 Test session_encode() function : variation
+--EXTENSIONS--
+session
 --SKIPIF--
 <?php include('skipif.inc'); ?>
 --FILE--
 <?php
 
 ob_start();
-
-/* 
- * Prototype : string session_encode(void)
- * Description : Encodes the current session data as a string
- * Source code : ext/session/session.c 
- */
 
 echo "*** Testing session_encode() : variation ***\n";
 
@@ -35,7 +31,7 @@ Warning: session_encode(): Cannot encode non-existent session in %s on line %d
 bool(false)
 bool(true)
 bool(false)
-NULL
+bool(true)
 bool(false)
 bool(true)
 bool(false)

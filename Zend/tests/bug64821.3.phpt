@@ -4,17 +4,17 @@ Bug #64821 Custom Exceptions crash when internal properties overridden (variatio
 <?php
 
 class a extends exception {
-	public function __construct() {
-		$this->line = array();
-		$this->file = NULL;
-	}
+    public function __construct() {
+        $this->line = 0;
+        $this->file = "";
+    }
 }
 
 throw new a;
 
 ?>
 --EXPECTF--
-Fatal error: Uncaught exception 'a' in :0
+Fatal error: Uncaught a in :0
 Stack trace:
 #0 {main}
   thrown in Unknown on line %d

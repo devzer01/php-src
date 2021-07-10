@@ -1,12 +1,12 @@
 --TEST--
 SOAP Server 27: setObject and getFunctions
---SKIPIF--
-<?php require_once('skipif.inc'); ?>
+--EXTENSIONS--
+soap
 --FILE--
 <?php
 class Foo {
 
-  function Foo() {
+  function __construct() {
   }
 
   function test() {
@@ -23,7 +23,7 @@ echo "ok\n";
 --EXPECT--
 array(2) {
   [0]=>
-  string(3) "Foo"
+  string(11) "__construct"
   [1]=>
   string(4) "test"
 }

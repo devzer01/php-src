@@ -1,5 +1,7 @@
 --TEST--
 odbc_exec(): Getting data from query
+--EXTENSIONS--
+odbc
 --SKIPIF--
 <?php include 'skipif.inc'; ?>
 --FILE--
@@ -27,7 +29,7 @@ odbc_exec($conn, 'DROP TABLE FOO');
 odbc_exec($conn, 'DROP DATABASE odbcTEST');
 
 ?>
---EXPECTF--
+--EXPECT--
 bool(true)
 string(1) "1"
 array(1) {

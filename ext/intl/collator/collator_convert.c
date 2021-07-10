@@ -1,11 +1,9 @@
 /*
    +----------------------------------------------------------------------+
-   | PHP Version 7                                                        |
-   +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
    | available through the world-wide-web at the following url:           |
-   | http://www.php.net/license/3_01.txt                                  |
+   | https://www.php.net/license/3_01.txt                                 |
    | If you did not receive a copy of the PHP license and are unable to   |
    | obtain it through the world-wide-web, please send a note to          |
    | license@php.net so we can mail you a copy immediately.               |
@@ -27,12 +25,6 @@
 
 #include <unicode/ustring.h>
 #include <php.h>
-
-#if PHP_VERSION_ID <= 50100
-#define CAST_OBJECT_SHOULD_FREE ,0
-#else
-#define CAST_OBJECT_SHOULD_FREE
-#endif
 
 #define COLLATOR_CONVERT_RETURN_FAILED(retval) { \
 			Z_TRY_ADDREF_P(retval);              \
@@ -87,8 +79,7 @@ static void collator_convert_hash_item_from_utf16_to_utf8(
 {
 	const char* old_val;
 	size_t      old_val_len;
-	char*       new_val      = NULL;
-	size_t      new_val_len  = 0;
+	zend_string* u8str;
 	zval        znew_val;
 
 	/* Process string values only. */
@@ -99,15 +90,13 @@ static void collator_convert_hash_item_from_utf16_to_utf8(
 	old_val_len = Z_STRLEN_P( hashData );
 
 	/* Convert it from UTF-16LE to UTF-8 and save the result to new_val[_len]. */
-	intl_convert_utf16_to_utf8( &new_val, &new_val_len,
+	u8str = intl_convert_utf16_to_utf8(
 		(UChar*)old_val, UCHARS(old_val_len), status );
-	if( U_FAILURE( *status ) )
+	if( !u8str )
 		return;
 
 	/* Update current hash item with the converted value. */
-	ZVAL_STRINGL( &znew_val, new_val, new_val_len);
-	//???
-	efree(new_val);
+	ZVAL_NEW_STR( &znew_val, u8str);
 
 	if( hashKey )
 	{
@@ -169,58 +158,43 @@ void collator_convert_hash_from_utf16_to_utf8( HashTable* hash, UErrorCode* stat
  */
 zval* collator_convert_zstr_utf16_to_utf8( zval* utf16_zval, zval *rv )
 {
-	zval* utf8_zval   = NULL;
-	char* str         = NULL;
-	size_t str_len    = 0;
+	zend_string* u8str;
 	UErrorCode status = U_ZERO_ERROR;
 
 	/* Convert to utf8 then. */
-	intl_convert_utf16_to_utf8( &str, &str_len,
+	u8str = intl_convert_utf16_to_utf8(
 		(UChar*) Z_STRVAL_P(utf16_zval), UCHARS( Z_STRLEN_P(utf16_zval) ), &status );
-	if( U_FAILURE( status ) )
+	if( !u8str ) {
 		php_error( E_WARNING, "Error converting utf16 to utf8 in collator_convert_zval_utf16_to_utf8()" );
-
-	utf8_zval = rv;
-	ZVAL_STRINGL( utf8_zval, str, str_len);
-	//???
-	efree(str);
-
-	return utf8_zval;
+		ZVAL_EMPTY_STRING( rv );
+	} else {
+		ZVAL_NEW_STR( rv, u8str );
+	}
+	return rv;
 }
 /* }}} */
 
-/* {{{ collator_convert_zstr_utf8_to_utf16
- *
- * Convert string from utf8 to utf16.
- *
- * @param  zval* utf8_zval String to convert.
- *
- * @return zval* Converted string.
- */
-zval* collator_convert_zstr_utf8_to_utf16( zval* utf8_zval, zval *rv )
+zend_string *collator_convert_zstr_utf8_to_utf16(zend_string *utf8_str)
 {
-	zval* zstr        = NULL;
-	UChar* ustr       = NULL;
-	int32_t ustr_len   = 0;
+	UChar *ustr = NULL;
+	int32_t ustr_len = 0;
 	UErrorCode status = U_ZERO_ERROR;
 
 	/* Convert the string to UTF-16. */
 	intl_convert_utf8_to_utf16(
 			&ustr, &ustr_len,
-			Z_STRVAL_P( utf8_zval ), Z_STRLEN_P( utf8_zval ),
-			&status );
-	if( U_FAILURE( status ) )
-		php_error( E_WARNING, "Error casting object to string in collator_convert_zstr_utf8_to_utf16()" );
+			ZSTR_VAL(utf8_str), ZSTR_LEN(utf8_str),
+			&status);
+	// FIXME Or throw error or use intl internal error handler
+	if (U_FAILURE(status)) {
+		php_error(E_WARNING,
+			"Error casting object to string in collator_convert_zstr_utf8_to_utf16()");
+	}
 
-	/* Set string. */
-	zstr = rv;
-	ZVAL_STRINGL( zstr, (char*)ustr, UBYTES(ustr_len));
-	//???
+	zend_string *zstr = zend_string_init((char *) ustr, UBYTES(ustr_len), 0);
 	efree((char *)ustr);
-
 	return zstr;
 }
-/* }}} */
 
 /* {{{ collator_convert_object_to_string
  * Convert object to UTF16-encoded string.
@@ -239,38 +213,13 @@ zval* collator_convert_object_to_string( zval* obj, zval *rv )
 	}
 
 	/* Try object's handlers. */
-	if( Z_OBJ_HT_P(obj)->get )
+	zstr = rv;
+
+	if( Z_OBJ_HT_P(obj)->cast_object( Z_OBJ_P(obj), zstr, IS_STRING ) == FAILURE )
 	{
-		zstr = Z_OBJ_HT_P(obj)->get( obj, rv );
-
-		switch( Z_TYPE_P( zstr ) )
-		{
-			case IS_OBJECT:
-				{
-					/* Bail out. */
-					zval_ptr_dtor( zstr );
-					COLLATOR_CONVERT_RETURN_FAILED( obj );
-				} break;
-
-			case IS_STRING:
-				break;
-
-			default:
-				{
-					convert_to_string( zstr );
-				} break;
-		}
-	}
-	else if( Z_OBJ_HT_P(obj)->cast_object )
-	{
-		zstr = rv;
-
-		if( Z_OBJ_HT_P(obj)->cast_object( obj, zstr, IS_STRING CAST_OBJECT_SHOULD_FREE ) == FAILURE )
-		{
-			/* cast_object failed => bail out. */
-			zval_ptr_dtor( zstr );
-			COLLATOR_CONVERT_RETURN_FAILED( obj );
-		}
+		/* cast_object failed => bail out. */
+		zval_ptr_dtor( zstr );
+		COLLATOR_CONVERT_RETURN_FAILED( obj );
 	}
 
 	/* Object wasn't successfully converted => bail out. */
@@ -284,11 +233,12 @@ zval* collator_convert_object_to_string( zval* obj, zval *rv )
 			&ustr, &ustr_len,
 			Z_STRVAL_P( zstr ), Z_STRLEN_P( zstr ),
 			&status );
+	// FIXME Or throw error or use intl internal error handler
 	if( U_FAILURE( status ) )
 		php_error( E_WARNING, "Error casting object to string in collator_convert_object_to_string()" );
 
 	/* Cleanup zstr to hold utf16 string. */
-	zval_dtor( zstr );
+	zval_ptr_dtor_str( zstr );
 
 	/* Set string. */
 	ZVAL_STRINGL( zstr, (char*)ustr, UBYTES(ustr_len));
@@ -358,7 +308,7 @@ zval* collator_convert_string_to_double( zval* str, zval *rv )
  */
 zval* collator_convert_string_to_number_if_possible( zval* str, zval *rv )
 {
-	int is_numeric = 0;
+	zend_uchar is_numeric = 0;
 	zend_long lval      = 0;
 	double dval    = 0;
 
@@ -367,7 +317,7 @@ zval* collator_convert_string_to_number_if_possible( zval* str, zval *rv )
 		COLLATOR_CONVERT_RETURN_FAILED( str );
 	}
 
-	if( ( is_numeric = collator_is_numeric( (UChar*) Z_STRVAL_P(str), UCHARS( Z_STRLEN_P(str) ), &lval, &dval, 1 ) ) )
+	if ( ( is_numeric = collator_is_numeric( (UChar*) Z_STRVAL_P(str), UCHARS( Z_STRLEN_P(str) ), &lval, &dval, /* allow_errors */ 1 ) ) )
 	{
 		if( is_numeric == IS_LONG ) {
 			ZVAL_LONG(rv, lval);
@@ -384,43 +334,26 @@ zval* collator_convert_string_to_number_if_possible( zval* str, zval *rv )
 }
 /* }}} */
 
-/* {{{ collator_make_printable_zval
- *
- * Returns string from input zval.
+/* Returns string from input zval.
  *
  * @param  zval* arg zval to get string from
  *
- * @return zval* UTF16 string.
+ * @return zend_string* UTF16 string.
  */
-zval* collator_make_printable_zval( zval* arg, zval *rv)
+zend_string *collator_zval_to_string(zval *arg)
 {
-	zval arg_copy;
-	int use_copy = 0;
-	zval* str    = NULL;
-
-	if( Z_TYPE_P(arg) != IS_STRING )
-	{
-
-		use_copy = zend_make_printable_zval(arg, &arg_copy);
-
-		if( use_copy )
-		{
-			str = collator_convert_zstr_utf8_to_utf16( &arg_copy, rv );
-			zval_dtor( &arg_copy );
-		}
-		else
-		{
-			str = collator_convert_zstr_utf8_to_utf16( arg, rv );
-		}
-	}
-	else
-	{
-		COLLATOR_CONVERT_RETURN_FAILED( arg );
+	// TODO: This is extremely weird in that it leaves pre-existing strings alone and does not
+	// perform a UTF-8 to UTF-16 conversion for them. The assumption is that values that are
+	// already strings have already been converted beforehand. It would be good to clean this up.
+	if (Z_TYPE_P(arg) == IS_STRING) {
+		return zend_string_copy(Z_STR_P(arg));
 	}
 
-	return str;
+	zend_string *utf8_str = zval_get_string(arg);
+	zend_string *utf16_str = collator_convert_zstr_utf8_to_utf16(utf8_str);
+	zend_string_release(utf8_str);
+	return utf16_str;
 }
-/* }}} */
 
 /* {{{ collator_normalize_sort_argument
  *
@@ -458,11 +391,3 @@ zval* collator_normalize_sort_argument( zval* arg, zval *rv )
 	return n_arg;
 }
 /* }}} */
-/*
- * Local variables:
- * tab-width: 4
- * c-basic-offset: 4
- * End:
- * vim600: noet sw=4 ts=4 fdm=marker
- * vim<600: noet sw=4 ts=4
- */

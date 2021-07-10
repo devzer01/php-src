@@ -13,8 +13,7 @@ var_dump($ref->hasProperty('b'));
 var_dump(isset($obj->a));
 
 ?>
---EXPECTF--
+--EXPECT--
 bool(false)
 bool(false)
-
-Catchable fatal error: Closure object cannot have properties in %s on line %d
+bool(false)

@@ -12,20 +12,15 @@ session.gc_divisor=1000
 session.gc_maxlifetime=300
 session.save_path=
 session.name=PHPSESSID
---XFAIL--
-Waiting url_scanner_ex.re fix. https://bugs.php.net/bug.php?id=68970
+url_rewriter.hosts=
+--EXTENSIONS--
+session
 --SKIPIF--
 <?php include('skipif.inc'); ?>
 --FILE--
 <?php
 
 ob_start();
-
-/*
- * Prototype : session.use_trans_sid=1
- * Description : Test basic functionality.
- * Source code : ext/session/session.c
- */
 
 echo "*** Testing basic session functionality : variation3 use_trans_sid ***\n";
 
@@ -100,20 +95,45 @@ output_reset_rewrite_vars();
 
 echo "*** Test trans sid ***\n";
 ob_start();
-$session_id = 'testid';
+$session_id = 'session-basic3';
 session_id($session_id);
 session_start();
 // Should add session ID to relative URL only for SECURITY
 echo '
 <a href="/">test</a>
+<a href="/path">test</a>
+<a href="/path/">test</a>
+<a href="/path/?foo=var">test</a>
+<a href="../">test</a>
+<a href="../path">test</a>
+<a href="../path/">test</a>
+<a href="../path/?foo=var">test</a>
+
 <a href="/#bar">test</a>
+<a href="/path/#bar">test</a>
+<a href="/path/?foo=var#bar">test</a>
+<a href="../#bar">test</a>
+<a href="../path/#bar">test</a>
+<a href="../path/?foo=var#bar">test</a>
+
 <a href="/?foo">test</a>
 <a href="/?foo#bar">test</a>
 <a href="/?foo=var">test</a>
 <a href="/?foo=var#bar">test</a>
+<a href="../?foo">test</a>
+<a href="../?foo#bar">test</a>
+<a href="../?foo=var">test</a>
+<a href="../?foo=var#bar">test</a>
+
 <a href="file.php">test</a>
 <a href="file.php?foo">test</a>
 <a href="file.php?foo=var">test</a>
+<a href="file.php?foo=var#bar">test</a>
+<a href="../file.php">test</a>
+<a href="../file.php?foo">test</a>
+<a href="../file.php?foo=var">test</a>
+<a href="../file.php?foo=var#bar">test</a>
+
 <a href="http://php.net">test</a>
 <a href="http://php.net/">test</a>
 <a href="http://php.net/#bar">test</a>
@@ -131,6 +151,7 @@ echo '
 <a href="http://php.net/some/path/file.php?foo">test</a>
 <a href="http://php.net/some/path/file.php?foo=var">test</a>
 <a href="http://php.net/some/path/file.php?foo=var#bar">test</a>
+
 <a href="https://php.net">test</a>
 <a href="https://php.net/">test</a>
 <a href="https://php.net/?foo=var#bar">test</a>
@@ -145,6 +166,7 @@ echo '
 <a href="https://php.net:8443/file.php?foo=var#bar">test</a>
 <a href="https://php.net:8443/some/path/file.php">test</a>
 <a href="https://php.net:8443/some/path/file.php?foo=var#bar">test</a>
+
 <a href="//php.net">test</a>
 <a href="//php.net/">test</a>
 <a href="//php.net/#bar">test</a>
@@ -162,7 +184,32 @@ echo '
 <a href="//php.net/some/path/file.php?foo">test</a>
 <a href="//php.net/some/path/file.php?foo=var">test</a>
 <a href="//php.net/some/path/file.php?foo=var#bar">test</a>
+
 <form action="script.php" method="post">
+  <input type="text" name="test1"></input>
+  <input type="text" name="test2" />
+</form>
+<form action="../script.php" method="post">
+  <input type="text" name="test1"></input>
+  <input type="text" name="test2" />
+</form>
+<form action="/path/script.php" method="post">
+  <input type="text" name="test1"></input>
+  <input type="text" name="test2" />
+</form>
+<form action="../path/script.php" method="post">
+  <input type="text" name="test1"></input>
+  <input type="text" name="test2" />
+</form>
+<form method="post" action="http://php.net/script.php">
+  <input type="text" name="test1"></input>
+  <input type="text" name="test2" />
+</form>
+<form method="post" action="https://php.net/script.php">
+  <input type="text" name="test1"></input>
+  <input type="text" name="test2" />
+</form>
+<form method="post" action="//php.net/script.php">
   <input type="text" name="test1"></input>
   <input type="text" name="test2" />
 </form>
@@ -180,15 +227,40 @@ ob_end_flush();
 *** Testing basic session functionality : variation3 use_trans_sid ***
 *** Test trans sid ***
 
-<a href="/?PHPSESSID=testid">test</a>
-<a href="/?PHPSESSID=testid#bar">test</a>
-<a href="/?foo&PHPSESSID=testid">test</a>
-<a href="/?foo&PHPSESSID=testid#bar">test</a>
-<a href="/?foo=var&PHPSESSID=testid">test</a>
-<a href="/?foo=var&PHPSESSID=testid#bar">test</a>
-<a href="file.php?PHPSESSID=testid">test</a>
-<a href="file.php?foo&PHPSESSID=testid">test</a>
-<a href="file.php?foo=var&PHPSESSID=testid">test</a>
+<a href="/?PHPSESSID=session-basic3">test</a>
+<a href="/path?PHPSESSID=session-basic3">test</a>
+<a href="/path/?PHPSESSID=session-basic3">test</a>
+<a href="/path/?foo=var&PHPSESSID=session-basic3">test</a>
+<a href="../?PHPSESSID=session-basic3">test</a>
+<a href="../path?PHPSESSID=session-basic3">test</a>
+<a href="../path/?PHPSESSID=session-basic3">test</a>
+<a href="../path/?foo=var&PHPSESSID=session-basic3">test</a>
+
+<a href="/?PHPSESSID=session-basic3#bar">test</a>
+<a href="/path/?PHPSESSID=session-basic3#bar">test</a>
+<a href="/path/?foo=var&PHPSESSID=session-basic3#bar">test</a>
+<a href="../?PHPSESSID=session-basic3#bar">test</a>
+<a href="../path/?PHPSESSID=session-basic3#bar">test</a>
+<a href="../path/?foo=var&PHPSESSID=session-basic3#bar">test</a>
+
+<a href="/?foo&PHPSESSID=session-basic3">test</a>
+<a href="/?foo&PHPSESSID=session-basic3#bar">test</a>
+<a href="/?foo=var&PHPSESSID=session-basic3">test</a>
+<a href="/?foo=var&PHPSESSID=session-basic3#bar">test</a>
+<a href="../?foo&PHPSESSID=session-basic3">test</a>
+<a href="../?foo&PHPSESSID=session-basic3#bar">test</a>
+<a href="../?foo=var&PHPSESSID=session-basic3">test</a>
+<a href="../?foo=var&PHPSESSID=session-basic3#bar">test</a>
+
+<a href="file.php?PHPSESSID=session-basic3">test</a>
+<a href="file.php?foo&PHPSESSID=session-basic3">test</a>
+<a href="file.php?foo=var&PHPSESSID=session-basic3">test</a>
+<a href="file.php?foo=var&PHPSESSID=session-basic3#bar">test</a>
+<a href="../file.php?PHPSESSID=session-basic3">test</a>
+<a href="../file.php?foo&PHPSESSID=session-basic3">test</a>
+<a href="../file.php?foo=var&PHPSESSID=session-basic3">test</a>
+<a href="../file.php?foo=var&PHPSESSID=session-basic3#bar">test</a>
+
 <a href="http://php.net">test</a>
 <a href="http://php.net/">test</a>
 <a href="http://php.net/#bar">test</a>
@@ -206,6 +278,7 @@ ob_end_flush();
 <a href="http://php.net/some/path/file.php?foo">test</a>
 <a href="http://php.net/some/path/file.php?foo=var">test</a>
 <a href="http://php.net/some/path/file.php?foo=var#bar">test</a>
+
 <a href="https://php.net">test</a>
 <a href="https://php.net/">test</a>
 <a href="https://php.net/?foo=var#bar">test</a>
@@ -220,6 +293,7 @@ ob_end_flush();
 <a href="https://php.net:8443/file.php?foo=var#bar">test</a>
 <a href="https://php.net:8443/some/path/file.php">test</a>
 <a href="https://php.net:8443/some/path/file.php?foo=var#bar">test</a>
+
 <a href="//php.net">test</a>
 <a href="//php.net/">test</a>
 <a href="//php.net/#bar">test</a>
@@ -237,12 +311,37 @@ ob_end_flush();
 <a href="//php.net/some/path/file.php?foo">test</a>
 <a href="//php.net/some/path/file.php?foo=var">test</a>
 <a href="//php.net/some/path/file.php?foo=var#bar">test</a>
-<form action="script.php" method="post"><input type="hidden" name="PHPSESSID" value="testid" /><input type="hidden" name="PHPSESSID" value="testid" />
+
+<form action="script.php" method="post"><input type="hidden" name="PHPSESSID" value="session-basic3" />
   <input type="text" name="test1"></input>
   <input type="text" name="test2" />
 </form>
-NULL
+<form action="../script.php" method="post"><input type="hidden" name="PHPSESSID" value="session-basic3" />
+  <input type="text" name="test1"></input>
+  <input type="text" name="test2" />
+</form>
+<form action="/path/script.php" method="post"><input type="hidden" name="PHPSESSID" value="session-basic3" />
+  <input type="text" name="test1"></input>
+  <input type="text" name="test2" />
+</form>
+<form action="../path/script.php" method="post"><input type="hidden" name="PHPSESSID" value="session-basic3" />
+  <input type="text" name="test1"></input>
+  <input type="text" name="test2" />
+</form>
+<form method="post" action="http://php.net/script.php">
+  <input type="text" name="test1"></input>
+  <input type="text" name="test2" />
+</form>
+<form method="post" action="https://php.net/script.php">
+  <input type="text" name="test1"></input>
+  <input type="text" name="test2" />
+</form>
+<form method="post" action="//php.net/script.php">
+  <input type="text" name="test1"></input>
+  <input type="text" name="test2" />
+</form>
+bool(true)
 *** Cleanup ***
 bool(true)
-string(6) "testid"
+string(14) "session-basic3"
 bool(true)

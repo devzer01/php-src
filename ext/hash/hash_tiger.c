@@ -1,13 +1,11 @@
 /*
   +----------------------------------------------------------------------+
-  | PHP Version 7                                                        |
-  +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2015 The PHP Group                                |
+  | Copyright (c) The PHP Group                                          |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
   | available through the world-wide-web at the following url:           |
-  | http://www.php.net/license/3_01.txt                                  |
+  | https://www.php.net/license/3_01.txt                                 |
   | If you did not receive a copy of the PHP license and are unable to   |
   | obtain it through the world-wide-web, please send a note to          |
   | license@php.net so we can mail you a copy immediately.               |
@@ -16,8 +14,6 @@
   |          Sara Golemon <pollita@php.net>                              |
   +----------------------------------------------------------------------+
 */
-
-/* $Id$ */
 
 #include "php_hash.h"
 #include "php_hash_tiger.h"
@@ -42,13 +38,13 @@
 #define round(a,b,c,x,mul) \
 	c ^= x; \
 	a -= t1[(unsigned char)(c)] ^ \
-		t2[(unsigned char)(((php_hash_uint32)(c))>>(2*8))] ^ \
+		t2[(unsigned char)(((uint32_t)(c))>>(2*8))] ^ \
 		t3[(unsigned char)((c)>>(4*8))] ^ \
-		t4[(unsigned char)(((php_hash_uint32)((c)>>(4*8)))>>(2*8))] ; \
-	b += t4[(unsigned char)(((php_hash_uint32)(c))>>(1*8))] ^ \
-		t3[(unsigned char)(((php_hash_uint32)(c))>>(3*8))] ^ \
-		t2[(unsigned char)(((php_hash_uint32)((c)>>(4*8)))>>(1*8))] ^ \
-		t1[(unsigned char)(((php_hash_uint32)((c)>>(4*8)))>>(3*8))]; \
+		t4[(unsigned char)(((uint32_t)((c)>>(4*8)))>>(2*8))] ; \
+	b += t4[(unsigned char)(((uint32_t)(c))>>(1*8))] ^ \
+		t3[(unsigned char)(((uint32_t)(c))>>(3*8))] ^ \
+		t2[(unsigned char)(((uint32_t)((c)>>(4*8)))>>(1*8))] ^ \
+		t1[(unsigned char)(((uint32_t)((c)>>(4*8)))>>(3*8))]; \
 	b *= mul;
 
 #define pass(a,b,c,mul) \
@@ -105,7 +101,7 @@
 #	define split(str) \
 	{ \
 		int i; \
-		php_hash_uint64 tmp[8]; \
+		uint64_t tmp[8]; \
 		 \
 		for (i = 0; i < 64; ++i) { \
 			((unsigned char *) tmp)[i^7] = ((unsigned char *) str)[i]; \
@@ -118,8 +114,8 @@
 
 #define tiger_compress(passes, str, state) \
 { \
-	register php_hash_uint64 a, b, c, tmpa, x0, x1, x2, x3, x4, x5, x6, x7; \
-	php_hash_uint64 aa, bb, cc; \
+	register uint64_t a, b, c, tmpa, x0, x1, x2, x3, x4, x5, x6, x7; \
+	uint64_t aa, bb, cc; \
 	unsigned int pass_no; \
 	\
 	a = state[0]; \
@@ -138,7 +134,7 @@
 
 static inline void TigerFinalize(PHP_TIGER_CTX *context)
 {
-	context->passed += (php_hash_uint64) context->length << 3;
+	context->passed += (uint64_t) context->length << 3;
 
 	context->buffer[context->length++] = 0x1;
 	if (context->length % 8) {
@@ -148,14 +144,14 @@ static inline void TigerFinalize(PHP_TIGER_CTX *context)
 
 	if (context->length > 56) {
 		memset(&context->buffer[context->length], 0, 64 - context->length);
-		tiger_compress(context->passes, ((php_hash_uint64 *) context->buffer), context->state);
+		tiger_compress(context->passes, ((uint64_t *) context->buffer), context->state);
 		memset(context->buffer, 0, 56);
 	} else {
 		memset(&context->buffer[context->length], 0, 56 - context->length);
 	}
 
 #ifndef WORDS_BIGENDIAN
-	memcpy(&context->buffer[56], &context->passed, sizeof(php_hash_uint64));
+	memcpy(&context->buffer[56], &context->passed, sizeof(uint64_t));
 #else
 	context->buffer[56] = (unsigned char) (context->passed & 0xff);
 	context->buffer[57] = (unsigned char) ((context->passed >> 8) & 0xff);
@@ -166,7 +162,7 @@ static inline void TigerFinalize(PHP_TIGER_CTX *context)
 	context->buffer[62] = (unsigned char) ((context->passed >> 48) & 0xff);
 	context->buffer[63] = (unsigned char) ((context->passed >> 56) & 0xff);
 #endif
-	tiger_compress(context->passes, ((php_hash_uint64 *) context->buffer), context->state);
+	tiger_compress(context->passes, ((uint64_t *) context->buffer), context->state);
 }
 
 static inline void TigerDigest(unsigned char *digest_str, unsigned int digest_len, PHP_TIGER_CTX *context)
@@ -178,7 +174,7 @@ static inline void TigerDigest(unsigned char *digest_str, unsigned int digest_le
 	}
 }
 
-PHP_HASH_API void PHP_3TIGERInit(PHP_TIGER_CTX *context)
+PHP_HASH_API void PHP_3TIGERInit(PHP_TIGER_CTX *context, ZEND_ATTRIBUTE_UNUSED HashTable *args)
 {
 	memset(context, 0, sizeof(*context));
 	context->state[0] = L64(0x0123456789ABCDEF);
@@ -186,7 +182,7 @@ PHP_HASH_API void PHP_3TIGERInit(PHP_TIGER_CTX *context)
 	context->state[2] = L64(0xF096A5B4C3B2E187);
 }
 
-PHP_HASH_API void PHP_4TIGERInit(PHP_TIGER_CTX *context)
+PHP_HASH_API void PHP_4TIGERInit(PHP_TIGER_CTX *context, ZEND_ATTRIBUTE_UNUSED HashTable *args)
 {
 	memset(context, 0, sizeof(*context));
 	context->passes = 1;
@@ -206,14 +202,14 @@ PHP_HASH_API void PHP_TIGERUpdate(PHP_TIGER_CTX *context, const unsigned char *i
 		if (context->length) {
 			i = 64 - context->length;
 			memcpy(&context->buffer[context->length], input, i);
-			tiger_compress(context->passes, ((const php_hash_uint64 *) context->buffer), context->state);
+			tiger_compress(context->passes, ((const uint64_t *) context->buffer), context->state);
 			ZEND_SECURE_ZERO(context->buffer, 64);
 			context->passed += 512;
 		}
 
 		for (; i + 64 <= len; i += 64) {
 			memcpy(context->buffer, &input[i], 64);
-			tiger_compress(context->passes, ((const php_hash_uint64 *) context->buffer), context->state);
+			tiger_compress(context->passes, ((const uint64_t *) context->buffer), context->state);
 			context->passed += 512;
 		}
 		ZEND_SECURE_ZERO(&context->buffer[r], 64-r);
@@ -243,15 +239,33 @@ PHP_HASH_API void PHP_TIGER192Final(unsigned char digest[24], PHP_TIGER_CTX *con
 	ZEND_SECURE_ZERO(context, sizeof(*context));
 }
 
+static int php_tiger_unserialize(php_hashcontext_object *hash, zend_long magic, const zval *zv)
+{
+	PHP_TIGER_CTX *ctx = (PHP_TIGER_CTX *) hash->context;
+	int r = FAILURE;
+	if (magic == PHP_HASH_SERIALIZE_MAGIC_SPEC
+		&& (r = php_hash_unserialize_spec(hash, zv, PHP_TIGER_SPEC)) == SUCCESS
+		&& ctx->length < sizeof(ctx->buffer)) {
+		return SUCCESS;
+	} else {
+		return r != SUCCESS ? r : -2000;
+	}
+}
+
 #define PHP_HASH_TIGER_OPS(p, b) \
 	const php_hash_ops php_hash_##p##tiger##b##_ops = { \
+		"tiger" #b "," #p, \
 		(php_hash_init_func_t) PHP_##p##TIGERInit, \
 		(php_hash_update_func_t) PHP_TIGERUpdate, \
 		(php_hash_final_func_t) PHP_TIGER##b##Final, \
-		(php_hash_copy_func_t) php_hash_copy, \
+		php_hash_copy, \
+		php_hash_serialize, \
+		php_tiger_unserialize, \
+		PHP_TIGER_SPEC, \
 		b/8, \
 		64, \
-		sizeof(PHP_TIGER_CTX) \
+		sizeof(PHP_TIGER_CTX), \
+		1 \
 	}
 
 PHP_HASH_TIGER_OPS(3, 128);
@@ -260,12 +274,3 @@ PHP_HASH_TIGER_OPS(3, 192);
 PHP_HASH_TIGER_OPS(4, 128);
 PHP_HASH_TIGER_OPS(4, 160);
 PHP_HASH_TIGER_OPS(4, 192);
-
-/*
- * Local variables:
- * tab-width: 4
- * c-basic-offset: 4
- * End:
- * vim600: sw=4 ts=4 fdm=marker
- * vim<600: sw=4 ts=4
- */

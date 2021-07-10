@@ -1,9 +1,8 @@
 --TEST--
 PDO SQLite Feature Request #42589 (getColumnMeta() should also return table name)
---SKIPIF--
-<?php
-if (!extension_loaded('pdo') || !extension_loaded('pdo_sqlite')) die('skip not loaded');
-?>
+--EXTENSIONS--
+pdo
+pdo_sqlite
 --FILE--
 <?php
 $db = new PDO("sqlite::memory:");
@@ -18,6 +17,6 @@ $meta2 = $result->getColumnMeta(1);
 var_dump(!empty($meta1['table']) && $meta1['table'] == 'test');
 var_dump(!empty($meta2['table']) && $meta2['table'] == 'test');
 ?>
---EXPECTF--
+--EXPECT--
 bool(true)
 bool(true)

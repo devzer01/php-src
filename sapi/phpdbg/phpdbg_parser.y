@@ -1,32 +1,8 @@
-%{
-
+%require "3.0"
 /*
  * phpdbg_parser.y
  * (from php-src root)
- * flex sapi/phpdbg/dev/phpdbg_lexer.l
- * bison sapi/phpdbg/dev/phpdbg_parser.y
  */
-
-#include "phpdbg.h"
-#include "phpdbg_cmd.h"
-#include "phpdbg_utils.h"
-#include "phpdbg_cmd.h"
-#include "phpdbg_prompt.h"
-
-#define YYSTYPE phpdbg_param_t
-
-#include "phpdbg_parser.h"
-#include "phpdbg_lexer.h"
-
-#undef yyerror
-static int yyerror(const char *msg);
-
-ZEND_EXTERN_MODULE_GLOBALS(phpdbg);
-
-%}
-
-%pure-parser
-%error-verbose
 
 %code requires {
 #include "phpdbg.h"
@@ -36,9 +12,34 @@ typedef void* yyscan_t;
 #endif
 }
 
-%output  "sapi/phpdbg/phpdbg_parser.c"
-%defines "sapi/phpdbg/phpdbg_parser.h"
+%code {
 
+#include "phpdbg_cmd.h"
+#include "phpdbg_utils.h"
+#include "phpdbg_cmd.h"
+#include "phpdbg_prompt.h"
+
+#include "phpdbg_parser.h"
+#include "phpdbg_lexer.h"
+
+#undef yyerror
+static int yyerror(const char *msg);
+
+ZEND_EXTERN_MODULE_GLOBALS(phpdbg)
+
+#ifdef _MSC_VER
+#define YYMALLOC malloc
+#define YYFREE free
+#endif
+
+}
+
+%define api.prefix {phpdbg_}
+%define api.pure full
+%define api.value.type {phpdbg_param_t}
+%define parse.error verbose
+
+%token END 0 "end of command"
 %token T_EVAL       "eval"
 %token T_RUN        "run"
 %token T_SHELL      "shell"
@@ -48,7 +49,8 @@ typedef void* yyscan_t;
 %token T_STRING     "string (some input, perhaps)"
 %token T_COLON      ": (colon)"
 %token T_DCOLON     ":: (double colon)"
-%token T_POUND      "# (pound sign)"
+%token T_POUND      "# (pound sign followed by digits)"
+%token T_SEPARATOR  "# (pound sign)"
 %token T_PROTO      "protocol (file://)"
 %token T_DIGITS     "digits (numbers)"
 %token T_LITERAL    "literal (string)"
@@ -62,15 +64,20 @@ typedef void* yyscan_t;
 %% /* Rules */
 
 input
-	: parameters
-	| full_expression { phpdbg_stack_push(PHPDBG_G(parser_stack), &$1); }
-	| /* nothing */
+	: command { $$ = $1; }
+	| input T_SEPARATOR command { phpdbg_stack_separate($1.top); $$ = $3; }
+	| %empty
+	;
+
+command
+	: parameters { $$.top = PHPDBG_G(parser_stack)->top; }
+	| full_expression { phpdbg_stack_push(PHPDBG_G(parser_stack), &$1); $$.top = PHPDBG_G(parser_stack)->top; }
 	;
 
 parameters
-	: parameter { phpdbg_stack_push(PHPDBG_G(parser_stack), &$1); }
-	| parameters parameter { phpdbg_stack_push(PHPDBG_G(parser_stack), &$2); }
-	| parameters req_id { $$ = $1; }
+	: parameter { phpdbg_stack_push(PHPDBG_G(parser_stack), &$1); $$.top = PHPDBG_G(parser_stack)->top; }
+	| parameters parameter { phpdbg_stack_push(PHPDBG_G(parser_stack), &$2); $$.top = PHPDBG_G(parser_stack)->top; }
+	| parameters T_REQ_ID { $$ = $1; PHPDBG_G(req_id) = $2.num; }
 	;
 
 parameter
@@ -137,7 +144,7 @@ parameter
 
 req_id
 	: T_REQ_ID { PHPDBG_G(req_id) = $1.num; }
-	| /* empty */
+	| %empty
 ;
 
 full_expression
@@ -165,7 +172,7 @@ full_expression
 %%
 
 static int yyerror(const char *msg) {
-	phpdbg_error("command", "type=\"parseerror\" msg=\"%s\"", "Parse Error: %s", msg);
+	phpdbg_error("Parse Error: %s", msg);
 
 	{
 		const phpdbg_param_t *top = PHPDBG_G(parser_stack);
@@ -179,6 +186,15 @@ static int yyerror(const char *msg) {
 }
 
 int phpdbg_do_parse(phpdbg_param_t *stack, char *input) {
+	if (!*input) {
+		return 0;
+	}
+
+	if (PHPDBG_G(cur_command)) {
+		free(PHPDBG_G(cur_command));
+	}
+	PHPDBG_G(cur_command) = strdup(input);
+
 	phpdbg_init_lexer(stack, input);
 
 	return yyparse();

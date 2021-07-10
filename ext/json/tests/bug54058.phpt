@@ -1,7 +1,5 @@
 --TEST--
 Bug #54058 (json_last_error() invalid UTF-8 produces wrong error)
---SKIPIF--
-<?php if (!extension_loaded("json")) print "skip"; ?>
 --FILE--
 <?php
 
@@ -29,7 +27,7 @@ json_encode($c);
 var_dump(json_last_error(), json_last_error_msg());
 
 ?>
---EXPECTF--
+--EXPECT--
 int(5)
 string(56) "Malformed UTF-8 characters, possibly incorrectly encoded"
 int(5)

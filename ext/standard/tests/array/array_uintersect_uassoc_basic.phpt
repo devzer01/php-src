@@ -1,14 +1,13 @@
 --TEST--
-array_uintersect_uassoc(): Test return type and value for expected input 
+array_uintersect_uassoc(): Test return type and value for expected input
 --FILE--
 <?php
 /*
-* proto array array_uintersect_assoc ( array $array1, array $array2 [, array $ ..., callback $data_compare_func] )
 * Function is implemented in ext/standard/array.c
 */
 class cr {
     private $priv_member;
-    function cr($val) {
+    function __construct($val) {
         $this->priv_member = $val;
     }
     static function comp_func_cr($a, $b) {

@@ -7,4 +7,7 @@ $x = static::class;
 
 ?>
 --EXPECTF--
-Fatal error: Cannot access static::class when no class scope is active in %s on line %d
+Fatal error: Uncaught Error: Cannot use "static" in the global scope in %s:%d
+Stack trace:
+#0 {main}
+  thrown in %s on line 3

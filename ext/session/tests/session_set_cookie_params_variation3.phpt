@@ -2,18 +2,14 @@
 Test session_set_cookie_params() function : variation
 --INI--
 session.cookie_domain=foo
+--EXTENSIONS--
+session
 --SKIPIF--
 <?php include('skipif.inc'); ?>
 --FILE--
 <?php
 
 ob_start();
-
-/* 
- * Prototype : void session_set_cookie_params(int $lifetime [, string $path [, string $domain [, bool $secure [, bool $httponly]]]])
- * Description : Set the session cookie parameters
- * Source code : ext/session/session.c 
- */
 
 echo "*** Testing session_set_cookie_params() : variation ***\n";
 
@@ -35,15 +31,16 @@ ob_end_flush();
 --EXPECTF--
 *** Testing session_set_cookie_params() : variation ***
 string(3) "foo"
-NULL
+bool(true)
 string(4) "blah"
 bool(true)
 string(4) "blah"
-NULL
-string(4) "guff"
+
+Warning: session_set_cookie_params(): Session cookie parameters cannot be changed when a session is active in %s on line %d
+bool(false)
+string(4) "blah"
 bool(true)
-string(4) "guff"
-NULL
+string(4) "blah"
+bool(true)
 string(3) "foo"
 Done
-
