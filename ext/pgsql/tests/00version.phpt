@@ -1,17 +1,18 @@
 --TEST--
 PostgreSQL version
+--EXTENSIONS--
+pgsql
 --SKIPIF--
-<?php include("skipif.inc"); ?>
+<?php include("inc/skipif.inc"); ?>
 --FILE--
 <?php
 // Get postgresql version for easier debugging.
 // Execute run-test.php with --keep-all to get version string in 00version.log or 00version.out
-include('config.inc');
+include('inc/config.inc');
 
 $db = pg_connect($conn_str);
 var_dump(pg_version($db));
 pg_close($db);
-
 // Get environment vars for debugging
 var_dump(serialize($_ENV));
 
@@ -46,5 +47,5 @@ array(13) {
   ["application_name"]=>
   string(%d) %s
 }
-string(%d) "%s"
+string(%d) "%a"
 OK

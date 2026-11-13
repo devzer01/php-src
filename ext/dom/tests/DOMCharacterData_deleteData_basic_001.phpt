@@ -3,8 +3,8 @@ DOMCharacterData::deleteData() with count exceeding string size.
 --CREDITS--
 Eric Lee Stewart <ericleestewart@gmail.com>
 # TestFest Atlanta 2009-05-24
---SKIPIF--
-<?php require_once('skipif.inc'); ?>
+--EXTENSIONS--
+dom
 --FILE--
 <?php
 $document = new DOMDocument;
@@ -17,4 +17,4 @@ $cdata->deleteData(1, 10);
 var_dump($cdata->data);
 ?>
 --EXPECTF--
-%unicode|string%(%d) "t"
+string(%d) "t"

@@ -9,47 +9,50 @@ precision=14
 --FILE--
 <?php
 $values = array(111000111,
-				011100000,
-				1111111111111111111111111111111,
-				10000000000000000000000000000000,
-				100002001,
-				'111000111',
-				'011100000',
-				'1111111111111111111111111111111',
-				'10000000000000000000000000000000',
-				'100002001',
-				'abcdefg',
-				311015,
-				31101.3,
-				31.1013e5,
-				0x111ABC,
-				011237,				
-				true,
-				false,
-				null);	
+                011100000,
+                1111111111111111111111111111111,
+                10000000000000000000000000000000,
+                100002001,
+                '111000111',
+                '011100000',
+                '1111111111111111111111111111111',
+                '10000000000000000000000000000000',
+                '100002001',
+                'abcdefg',
+                311015,
+                31101.3,
+                31.1013e5,
+                0x111ABC,
+                011237,
+                true,
+                false,
+                );
 
 for ($i = 0; $i < count($values); $i++) {
-	$res = bindec($values[$i]);
-	var_dump($res);
+    try {
+        $res = bindec($values[$i]);
+        var_dump($res);
+    } catch (Throwable $e) {
+        echo $e::class, ': ', $e->getMessage() . "\n";
+    }
 }
 ?>
---EXPECTF--
+--EXPECT--
 int(455)
-int(0)
-int(32766)
-int(5)
-int(129)
+Exception: Invalid characters passed for attempted conversion
+Exception: Invalid characters passed for attempted conversion
+Exception: Invalid characters passed for attempted conversion
+Exception: Invalid characters passed for attempted conversion
 int(455)
 int(224)
 int(2147483647)
 int(2147483648)
-int(129)
-int(0)
-int(13)
-int(13)
-int(26)
-int(6)
-int(0)
+Exception: Invalid characters passed for attempted conversion
+Exception: Invalid characters passed for attempted conversion
+Exception: Invalid characters passed for attempted conversion
+Exception: Invalid characters passed for attempted conversion
+Exception: Invalid characters passed for attempted conversion
+Exception: Invalid characters passed for attempted conversion
+Exception: Invalid characters passed for attempted conversion
 int(1)
-int(0)
 int(0)

@@ -28,7 +28,7 @@
 /*
  * is_tar() -- figure out whether file is a tar archive.
  *
- * Stolen (by the author!) from the public domain tar program:
+ * Stolen (by the author!) from the file_public domain tar program:
  * Public Domain version written 26 Aug 1985 John Gilmore (ihnp4!hoptoad!gnu).
  *
  * @(#)list.c 1.18 9/23/86 Public Domain - gnu
@@ -40,7 +40,7 @@
 #include "file.h"
 
 #ifndef lint
-FILE_RCSID("@(#)$File: is_tar.c,v 1.37 2010/11/30 14:58:53 rrt Exp $")
+FILE_RCSID("@(#)$File: is_tar.c,v 1.51 2026/06/02 17:05:51 christos Exp $")
 #endif
 
 #include "magic.h"
@@ -50,18 +50,20 @@ FILE_RCSID("@(#)$File: is_tar.c,v 1.37 2010/11/30 14:58:53 rrt Exp $")
 
 #define	isodigit(c)	( ((c) >= '0') && ((c) <= '7') )
 
-private int is_tar(const unsigned char *, size_t);
-private int from_oct(int, const char *);	/* Decode octal number */
+file_private int is_tar(const unsigned char *, size_t);
+file_private int from_oct(const char *, size_t);	/* Decode octal number */
 
-static const char tartype[][32] = {
-	"tar archive",
+static const char tartype[][32] = {	/* should be equal to messages */
+	"tar archive",			/* found in ../magic/Magdir/archive */
 	"POSIX tar archive",
-	"POSIX tar archive (GNU)",
+	"POSIX tar archive (GNU)",	/*  */
 };
 
-protected int
-file_is_tar(struct magic_set *ms, const unsigned char *buf, size_t nbytes)
+file_protected int
+file_is_tar(struct magic_set *ms, const struct buffer *b)
 {
+	const unsigned char *buf = CAST(const unsigned char *, b->fbuf);
+	size_t nbytes = b->flen;
 	/*
 	 * Do the tar test first, because if the first file in the tar
 	 * archive starts with a dot, we can confuse it with an nroff file.
@@ -69,16 +71,20 @@ file_is_tar(struct magic_set *ms, const unsigned char *buf, size_t nbytes)
 	int tar;
 	int mime = ms->flags & MAGIC_MIME;
 
-	if ((ms->flags & MAGIC_APPLE) != 0)
+	if ((ms->flags & (MAGIC_APPLE|MAGIC_EXTENSION)) != 0)
 		return 0;
 
 	tar = is_tar(buf, nbytes);
 	if (tar < 1 || tar > 3)
 		return 0;
 
+	if (mime == MAGIC_MIME_ENCODING)
+		return 1;
+
 	if (file_printf(ms, "%s", mime ? "application/x-tar" :
 	    tartype[tar - 1]) == -1)
 		return -1;
+
 	return 1;
 }
 
@@ -89,35 +95,53 @@ file_is_tar(struct magic_set *ms, const unsigned char *buf, size_t nbytes)
  *	2 for Unix Std (POSIX) tar file,
  *	3 for GNU tar file.
  */
-private int
+file_private int
 is_tar(const unsigned char *buf, size_t nbytes)
 {
-	const union record *header = (const union record *)(const void *)buf;
-	int	i;
-	int	sum, recsum;
-	const unsigned char	*p;
+	static const char gpkg_match[] = "/gpkg-1";
 
-	if (nbytes < sizeof(union record))
+	const union record *header = RCAST(const union record *,
+	    RCAST(const void *, buf));
+	size_t i;
+	int sum, recsum;
+	const unsigned char *p, *ep;
+	const char *nulp;
+
+	if (nbytes < sizeof(*header))
 		return 0;
 
-	recsum = from_oct(8,  header->header.chksum);
+	/* If the file looks like Gentoo GLEP 78 binary package (GPKG),
+	 * don't waste time on further checks and fall back to magic rules.
+	 */
+	nulp = CAST(const char *,
+	    memchr(header->header.name, 0, sizeof(header->header.name)));
+	if (nulp != NULL && nulp >= header->header.name + sizeof(gpkg_match) &&
+	    memcmp(nulp - sizeof(gpkg_match) + 1, gpkg_match,
+	    sizeof(gpkg_match)) == 0)
+	    return 0;
+
+	recsum = from_oct(header->header.chksum, sizeof(header->header.chksum));
 
 	sum = 0;
 	p = header->charptr;
-	for (i = sizeof(union record); --i >= 0;)
+	ep = header->charptr + sizeof(*header);
+	while (p < ep)
 		sum += *p++;
 
 	/* Adjust checksum to count the "chksum" field as blanks. */
-	for (i = sizeof(header->header.chksum); --i >= 0;)
+	for (i = 0; i < sizeof(header->header.chksum); i++)
 		sum -= header->header.chksum[i];
-	sum += ' ' * sizeof header->header.chksum;
+	sum += ' ' * sizeof(header->header.chksum);
 
 	if (sum != recsum)
 		return 0;	/* Not a tar archive */
 
-	if (strcmp(header->header.magic, GNUTMAGIC) == 0)
+	if (strncmp(header->header.magic, GNUTMAGIC,
+	    sizeof(header->header.magic)) == 0)
 		return 3;		/* GNU Unix Standard tar archive */
-	if (strcmp(header->header.magic, TMAGIC) == 0)
+
+	if (strncmp(header->header.magic, TMAGIC,
+	    sizeof(header->header.magic)) == 0)
 		return 2;		/* Unix Standard tar archive */
 
 	return 1;			/* Old fashioned tar archive */
@@ -129,23 +153,24 @@ is_tar(const unsigned char *buf, size_t nbytes)
  *
  * Result is -1 if the field is invalid (all blank, or non-octal).
  */
-private int
-from_oct(int digs, const char *where)
+file_private int
+from_oct(const char *where, size_t digs)
 {
 	int	value;
 
-	while (isspace((unsigned char)*where)) {	/* Skip spaces */
+	while (digs > 0 && isspace(CAST(unsigned char, *where))) {	/* Skip spaces */
 		where++;
-		if (--digs <= 0)
-			return -1;		/* All blank field */
+		digs--;
 	}
+	if (digs == 0)
+		return -1;		/* All blank field */
 	value = 0;
 	while (digs > 0 && isodigit(*where)) {	/* Scan til non-octal */
 		value = (value << 3) | (*where++ - '0');
-		--digs;
+		digs--;
 	}
 
-	if (digs > 0 && *where && !isspace((unsigned char)*where))
+	if (digs > 0 && *where && !isspace(CAST(unsigned char, *where)))
 		return -1;			/* Ended on non-(space/NUL) */
 
 	return value;

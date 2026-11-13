@@ -1,33 +1,33 @@
 /*
    +----------------------------------------------------------------------+
-   | PHP Version 7                                                        |
+   | Copyright © The PHP Group and Contributors.                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2015 The PHP Group                                |
-   +----------------------------------------------------------------------+
-   | This source file is subject to version 3.01 of the PHP license,      |
-   | that is bundled with this package in the file LICENSE, and is        |
-   | available through the world-wide-web at the following url:           |
-   | http://www.php.net/license/3_01.txt                                  |
-   | If you did not receive a copy of the PHP license and are unable to   |
-   | obtain it through the world-wide-web, please send a note to          |
-   | license@php.net so we can mail you a copy immediately.               |
+   | This source file is subject to the Modified BSD License that is      |
+   | bundled with this package in the file LICENSE, and is available      |
+   | through the World Wide Web at <https://www.php.net/license/>.        |
+   |                                                                      |
+   | SPDX-License-Identifier: BSD-3-Clause                                |
    +----------------------------------------------------------------------+
    | Author: Thies C. Arntzen <thies@thieso.net>                          |
    +----------------------------------------------------------------------+
 */
 
-/* $Id$ */
-
 #ifndef PHP_READLINE_H
 #define PHP_READLINE_H
 
-#if HAVE_LIBREADLINE || HAVE_LIBEDIT
-#ifdef ZTS
-#warning Readline module will *NEVER* be thread-safe
+#ifdef HAVE_LIBEDIT
+#define READLINE_LIB "libedit"
+#else
+#define READLINE_LIB "readline"
 #endif
+
+#if defined(HAVE_LIBREADLINE) || defined(HAVE_LIBEDIT)
 
 extern zend_module_entry readline_module_entry;
 #define phpext_readline_ptr &readline_module_entry
+
+#include "php_version.h"
+#define PHP_READLINE_VERSION PHP_VERSION
 
 #else
 
@@ -36,4 +36,3 @@ extern zend_module_entry readline_module_entry;
 #endif /* HAVE_LIBREADLINE */
 
 #endif /* PHP_READLINE_H */
-

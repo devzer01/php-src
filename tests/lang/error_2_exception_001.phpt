@@ -1,27 +1,22 @@
 --TEST--
 ZE2 errors caught as exceptions
---SKIPIF--
-<?php if (version_compare(zend_version(), '2.0.0-dev', '<')) die('skip ZendEngine 2 needed'); ?>
 --FILE--
 <?php
 
 class MyException extends Exception {
-	function MyException($_errno, $_errmsg) {
-		$this->errno = $_errno;
-		$this->errmsg = $_errmsg;
-	}
+    function __construct(public $errno, public $errmsg) {}
 
-	function getErrno() {
-		return $this->errno;
-	}
-    
-	function getErrmsg() {
-		return $this->errmsg;
-	}
+    function getErrno() {
+        return $this->errno;
+    }
+
+    function getErrmsg() {
+        return $this->errmsg;
+    }
 }
 
 function ErrorsToExceptions($errno, $errmsg) {
-	throw new MyException($errno, $errmsg);
+    throw new MyException($errno, $errmsg);
 }
 
 set_error_handler("ErrorsToExceptions");
@@ -31,15 +26,15 @@ set_error_handler("ErrorsToExceptions");
 
 try {
 } catch (MyException $exception) {
-	echo "There was an exception: " . $exception->getErrno() . ", '" . $exception->getErrmsg() . "'\n";
+    echo "There was an exception: " . $exception->getErrno() . ", '" . $exception->getErrmsg() . "'\n";
 }
 
 try {
-	trigger_error("I will become an exception", E_USER_ERROR);
+    trigger_error("I will become an exception", E_USER_WARNING);
 } catch (MyException $exception) {
-	echo "There was an exception: " . $exception->getErrno() . ", '" . $exception->getErrmsg() . "'\n";
+    echo "There was an exception: " . $exception->getErrno() . ", '" . $exception->getErrmsg() . "'\n";
 }
 
 ?>
 --EXPECT--
-There was an exception: 256, 'I will become an exception'
+There was an exception: 512, 'I will become an exception'

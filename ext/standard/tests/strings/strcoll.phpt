@@ -13,9 +13,9 @@ Testfest 2009 Munich
 setlocale (LC_COLLATE, 'C');
 $result = strcoll($a, $b);
 if($result > 0) {
-	echo "Pass\n";
+    echo "Pass\n";
 }
 ?>
---EXPECT--
+--EXPECTF--
+Deprecated: Function strcoll() is deprecated since 8.6, use Collator::compare() instead in %s on line %d
 Pass
-

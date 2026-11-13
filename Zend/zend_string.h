@@ -2,75 +2,169 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2015 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright © Zend Technologies Ltd., a subsidiary company of          |
+   |     Perforce Software, Inc., and Contributors.                       |
    +----------------------------------------------------------------------+
-   | This source file is subject to version 2.00 of the Zend license,     |
-   | that is bundled with this package in the file LICENSE, and is        |
-   | available through the world-wide-web at the following url:           |
-   | http://www.zend.com/license/2_00.txt.                                |
-   | If you did not receive a copy of the Zend license and are unable to  |
-   | obtain it through the world-wide-web, please send a note to          |
-   | license@zend.com so we can mail you a copy immediately.              |
+   | This source file is subject to the Modified BSD License that is      |
+   | bundled with this package in the file LICENSE, and is available      |
+   | through the World Wide Web at <https://www.php.net/license/>.        |
+   |                                                                      |
+   | SPDX-License-Identifier: BSD-3-Clause                                |
    +----------------------------------------------------------------------+
-   | Authors: Dmitry Stogov <dmitry@zend.com>                             |
+   | Authors: Dmitry Stogov <dmitry@php.net>                              |
    +----------------------------------------------------------------------+
 */
-
-/* $Id: $ */
 
 #ifndef ZEND_STRING_H
 #define ZEND_STRING_H
 
-#include "zend.h"
+#include "zend_types.h"
+#include "zend_gc.h"
+#include "zend_alloc.h"
+
+#include "zend_errors.h"
 
 BEGIN_EXTERN_C()
 
-ZEND_API extern zend_string *(*zend_new_interned_string)(zend_string *str);
-ZEND_API extern void (*zend_interned_strings_snapshot)(void);
-ZEND_API extern void (*zend_interned_strings_restore)(void);
+ZEND_NORETURN ZEND_API ZEND_COLD void zend_error_noreturn(int type, const char *format, ...) ZEND_ATTRIBUTE_FORMAT(printf, 2, 3);
 
-ZEND_API zend_ulong zend_hash_func(const char *str, size_t len);
-void zend_interned_strings_init(void);
-void zend_interned_strings_dtor(void);
+#include "zend_multiply.h"
+
+typedef void (*zend_string_copy_storage_func_t)(void);
+typedef zend_string *(ZEND_FASTCALL *zend_new_interned_string_func_t)(zend_string *str);
+typedef zend_string *(ZEND_FASTCALL *zend_string_init_interned_func_t)(const char *str, size_t size, bool permanent);
+typedef zend_string *(ZEND_FASTCALL *zend_string_init_existing_interned_func_t)(const char *str, size_t size, bool permanent);
+
+ZEND_API extern zend_new_interned_string_func_t zend_new_interned_string;
+ZEND_API extern zend_string_init_interned_func_t zend_string_init_interned;
+/* Init an interned string if it already exists, but do not create a new one if it does not. */
+ZEND_API extern zend_string_init_existing_interned_func_t zend_string_init_existing_interned;
+
+ZEND_API zend_ulong ZEND_FASTCALL zend_string_hash_func(zend_string *str);
+ZEND_API zend_ulong ZEND_FASTCALL zend_hash_func(const char *str, size_t len);
+ZEND_API zend_string* ZEND_FASTCALL zend_interned_string_find_permanent(zend_string *str);
+ZEND_API zend_string* ZEND_FASTCALL zend_string_finit_existing_interned(const char *str, size_t len, bool permanent, bool fallible);
+ZEND_API void ZEND_FASTCALL zend_bin2hex(char *out, const unsigned char *in, size_t in_len);
+ZEND_API zend_string *zend_bin2hex_str(const unsigned char *in, size_t in_len);
+
+ZEND_API zend_string *zend_string_concat2(
+	const char *str1, size_t str1_len,
+	const char *str2, size_t str2_len);
+ZEND_API zend_string *zend_string_concat3(
+	const char *str1, size_t str1_len,
+	const char *str2, size_t str2_len,
+	const char *str3, size_t str3_len);
+
+ZEND_API void zend_interned_strings_init(void);
+ZEND_API void zend_interned_strings_dtor(void);
+ZEND_API void zend_interned_strings_activate(void);
+ZEND_API void zend_interned_strings_deactivate(void);
+ZEND_API void zend_interned_strings_set_request_storage_handlers(
+	zend_new_interned_string_func_t handler,
+	zend_string_init_interned_func_t init_handler,
+	zend_string_init_existing_interned_func_t init_existing_handler);
+ZEND_API void zend_interned_strings_switch_storage(bool request);
+
+ZEND_API extern zend_string  *zend_empty_string;
+ZEND_API extern zend_string  *zend_one_char_string[256];
+ZEND_API extern zend_string **zend_known_strings;
 
 END_EXTERN_C()
 
-#define IS_INTERNED(s)					(GC_FLAGS(s) & IS_STR_INTERNED)
+/* Shortcuts */
 
-#define STR_EMPTY_ALLOC()				CG(empty_string)
+#define ZSTR_VAL(zstr)  (zstr)->val
+#define ZSTR_LEN(zstr)  (zstr)->len
+#define ZSTR_H(zstr)    (zstr)->h
+#define ZSTR_HASH(zstr) zend_string_hash_val(zstr)
 
-#define _STR_HEADER_SIZE XtOffsetOf(zend_string, val)
+/*---*/
 
-#define STR_ALLOCA_ALLOC(str, _len, use_heap) do { \
-	(str) = (zend_string *)do_alloca(ZEND_MM_ALIGNED_SIZE(_STR_HEADER_SIZE + (_len) + 1), (use_heap)); \
-	GC_REFCOUNT(str) = 1; \
-	(str)->h = 0; \
-	(str)->len = (_len); \
+static zend_always_inline bool ZSTR_IS_INTERNED(const zend_string *s) {
+	return GC_FLAGS(s) & IS_STR_INTERNED;
+}
+
+static inline bool ZSTR_IS_VALID_UTF8(const zend_string *s) {
+	return GC_FLAGS(s) & IS_STR_VALID_UTF8;
+}
+
+/* These are properties, encoded as flags, that will hold on the resulting string
+ * after concatenating two strings that have these property.
+ * Example: concatenating two UTF-8 strings yields another UTF-8 string. */
+#define ZSTR_COPYABLE_CONCAT_PROPERTIES		(IS_STR_VALID_UTF8)
+
+static inline uint32_t ZSTR_GET_COPYABLE_CONCAT_PROPERTIES(const zend_string *s) {
+	return GC_FLAGS(s) & ZSTR_COPYABLE_CONCAT_PROPERTIES;
+}
+
+/* This function returns the copyable concat properties which hold on both strings. */
+static inline uint32_t ZSTR_GET_COPYABLE_CONCAT_PROPERTIES_BOTH(const zend_string *s1, const zend_string *s2) {
+	return ZSTR_GET_COPYABLE_CONCAT_PROPERTIES(s1) & ZSTR_GET_COPYABLE_CONCAT_PROPERTIES(s2);
+}
+
+static inline void ZSTR_COPY_CONCAT_PROPERTIES(zend_string *out, const zend_string *in) {
+	uint32_t properties = ZSTR_GET_COPYABLE_CONCAT_PROPERTIES(in);
+	GC_ADD_FLAGS(out, properties);
+}
+
+static inline void ZSTR_COPY_CONCAT_PROPERTIES_BOTH(zend_string *out, const zend_string *in1, const zend_string *in2) {
+	uint32_t properties = ZSTR_GET_COPYABLE_CONCAT_PROPERTIES_BOTH(in1, in2);
+	GC_ADD_FLAGS(out, properties);
+}
+
+static zend_always_inline zend_string *ZSTR_EMPTY_ALLOC(void) {
+	return zend_empty_string;
+}
+
+static zend_always_inline zend_string *ZSTR_CHAR(unsigned char c) {
+	return zend_one_char_string[c];
+}
+
+static zend_always_inline zend_string *ZSTR_KNOWN(size_t idx) {
+	return zend_known_strings[idx];
+}
+
+#define _ZSTR_HEADER_SIZE offsetof(zend_string, val)
+
+#define _ZSTR_STRUCT_SIZE(len) (_ZSTR_HEADER_SIZE + len + 1)
+
+#define ZSTR_MAX_OVERHEAD (ZEND_MM_ALIGNED_SIZE(_ZSTR_HEADER_SIZE + 1))
+#define ZSTR_MAX_LEN (SIZE_MAX - ZSTR_MAX_OVERHEAD)
+
+#define ZSTR_ALLOCA_ALLOC(str, _len, use_heap) do { \
+	(str) = (zend_string *)do_alloca(ZEND_MM_ALIGNED_SIZE_EX(_ZSTR_STRUCT_SIZE(_len), 8), (use_heap)); \
+	GC_SET_REFCOUNT(str, 1); \
+	GC_TYPE_INFO(str) = GC_STRING; \
+	ZSTR_H(str) = 0; \
+	ZSTR_LEN(str) = _len; \
 } while (0)
-#define STR_ALLOCA_INIT(str, s, len, use_heap) do { \
-	STR_ALLOCA_ALLOC(str, len, use_heap); \
-	memcpy((str)->val, (s), (len)); \
-	(str)->val[(len)] = '\0'; \
+
+#define ZSTR_ALLOCA_INIT(str, s, len, use_heap) do { \
+	ZSTR_ALLOCA_ALLOC(str, len, use_heap); \
+	memcpy(ZSTR_VAL(str), (s), (len)); \
+	ZSTR_VAL(str)[(len)] = '\0'; \
 } while (0)
 
-#define STR_ALLOCA_FREE(str, use_heap) free_alloca(str, use_heap)
+#define ZSTR_ALLOCA_FREE(str, use_heap) free_alloca(str, use_heap)
+
+#define ZSTR_INIT_LITERAL(s, persistent) (zend_string_init(("" s), sizeof(s) - 1, (persistent)))
+
+/*---*/
 
 static zend_always_inline zend_ulong zend_string_hash_val(zend_string *s)
 {
-	if (!s->h) {
-		s->h = zend_hash_func(s->val, s->len);
-	}
-	return s->h;
+	return ZSTR_H(s) ? ZSTR_H(s) : zend_string_hash_func(s);
 }
 
 static zend_always_inline void zend_string_forget_hash_val(zend_string *s)
 {
-	s->h = 0;
+	ZSTR_H(s) = 0;
+	GC_DEL_FLAGS(s, IS_STR_VALID_UTF8);
 }
 
-static zend_always_inline uint32_t zend_string_refcount(zend_string *s)
+static zend_always_inline uint32_t zend_string_refcount(const zend_string *s)
 {
-	if (!IS_INTERNED(s)) {
+	if (!ZSTR_IS_INTERNED(s)) {
 		return GC_REFCOUNT(s);
 	}
 	return 1;
@@ -78,147 +172,432 @@ static zend_always_inline uint32_t zend_string_refcount(zend_string *s)
 
 static zend_always_inline uint32_t zend_string_addref(zend_string *s)
 {
-	if (!IS_INTERNED(s)) {
-		return ++GC_REFCOUNT(s);
+	if (!ZSTR_IS_INTERNED(s)) {
+		return GC_ADDREF(s);
 	}
 	return 1;
 }
 
 static zend_always_inline uint32_t zend_string_delref(zend_string *s)
 {
-	if (!IS_INTERNED(s)) {
-		return --GC_REFCOUNT(s);
+	if (!ZSTR_IS_INTERNED(s)) {
+		return GC_DELREF(s);
 	}
 	return 1;
 }
 
-static zend_always_inline zend_string *zend_string_alloc(size_t len, int persistent)
+/* Fallible variant of zend_string_alloc */
+static zend_always_inline zend_string *zend_string_falloc(size_t len, bool persistent, bool fallible)
 {
-	zend_string *ret = (zend_string *)pemalloc(ZEND_MM_ALIGNED_SIZE(_STR_HEADER_SIZE + len + 1), persistent);
+	zend_string *ret = (zend_string *)fpemalloc(ZEND_MM_ALIGNED_SIZE(_ZSTR_STRUCT_SIZE(len)), persistent, fallible);
+	if (ZEND_CONST_COND(fallible, true) && UNEXPECTED(ret == NULL)) {
+		return ret;
+	}
 
-	GC_REFCOUNT(ret) = 1;
-#if 1
-	/* optimized single assignment */
-	GC_TYPE_INFO(ret) = IS_STRING | ((persistent ? IS_STR_PERSISTENT : 0) << 8);
-#else
-	GC_TYPE(ret) = IS_STRING;
-	GC_FLAGS(ret) = (persistent ? IS_STR_PERSISTENT : 0);
-	GC_INFO(ret) = 0;
-#endif
-	ret->h = 0;
-	ret->len = len;
+	GC_SET_REFCOUNT(ret, 1);
+	GC_TYPE_INFO(ret) = GC_STRING | ((persistent ? IS_STR_PERSISTENT : 0) << GC_FLAGS_SHIFT);
+	ZSTR_H(ret) = 0;
+	ZSTR_LEN(ret) = len;
 	return ret;
 }
 
-static zend_always_inline zend_string *zend_string_safe_alloc(size_t n, size_t m, size_t l, int persistent)
+static zend_always_inline zend_string *zend_string_alloc(size_t len, bool persistent)
 {
-	zend_string *ret = (zend_string *)safe_pemalloc(n, m, ZEND_MM_ALIGNED_SIZE(_STR_HEADER_SIZE + l + 1), persistent);
+	return zend_string_falloc(len, persistent, /* fallible */ false);
+}
 
-	GC_REFCOUNT(ret) = 1;
-#if 1
-	/* optimized single assignment */
-	GC_TYPE_INFO(ret) = IS_STRING | ((persistent ? IS_STR_PERSISTENT : 0) << 8);
-#else
-	GC_TYPE(ret) = IS_STRING;
-	GC_FLAGS(ret) = (persistent ? IS_STR_PERSISTENT : 0);
-	GC_INFO(ret) = 0;
-#endif
-	ret->h = 0;
-	ret->len = (n * m) + l;
+/* Fallible variant of zend_string_safe_alloc */
+static zend_always_inline zend_string *zend_string_safe_falloc(size_t n, size_t m, size_t l, bool persistent, bool fallible)
+{
+	zend_string *ret = (zend_string *)safe_fpemalloc(n, m, ZEND_MM_ALIGNED_SIZE(_ZSTR_STRUCT_SIZE(l)), persistent, fallible);
+	if (ZEND_CONST_COND(fallible, true) && UNEXPECTED(ret == NULL)) {
+		return ret;
+	}
+
+	GC_SET_REFCOUNT(ret, 1);
+	GC_TYPE_INFO(ret) = GC_STRING | ((persistent ? IS_STR_PERSISTENT : 0) << GC_FLAGS_SHIFT);
+	ZSTR_H(ret) = 0;
+	ZSTR_LEN(ret) = (n * m) + l;
 	return ret;
 }
 
-static zend_always_inline zend_string *zend_string_init(const char *str, size_t len, int persistent)
+static zend_always_inline zend_string *zend_string_safe_alloc(size_t n, size_t m, size_t l, bool persistent)
+{
+	return zend_string_safe_falloc(n, m, l, persistent, /* fallible */ false);
+}
+
+static zend_always_inline zend_string *zend_string_init(const char *str, size_t len, bool persistent)
 {
 	zend_string *ret = zend_string_alloc(len, persistent);
 
-	memcpy(ret->val, str, len);
-	ret->val[len] = '\0';
+	memcpy(ZSTR_VAL(ret), str, len);
+	ZSTR_VAL(ret)[len] = '\0';
 	return ret;
+}
+
+static zend_always_inline zend_string *zend_string_finit(const char *str, size_t len, bool persistent, bool fallible)
+{
+	zend_string *ret = zend_string_safe_falloc(len, 1, 0, persistent, fallible);
+	if (ZEND_CONST_COND(fallible, true) && UNEXPECTED(ret == NULL)) {
+		return NULL;
+	}
+
+	memcpy(ZSTR_VAL(ret), str, len);
+	ZSTR_VAL(ret)[len] = '\0';
+	return ret;
+}
+
+static zend_always_inline zend_string *zend_string_finit_fast(const char *str, size_t len, bool fallible)
+{
+	if (len > 1) {
+		return zend_string_finit(str, len, 0, fallible);
+	} else if (len == 0) {
+		return zend_empty_string;
+	} else /* if (len == 1) */ {
+		return ZSTR_CHAR((zend_uchar) *str);
+	}
+}
+
+static zend_always_inline zend_string *zend_string_init_fast(const char *str, size_t len)
+{
+	return zend_string_finit_fast(str, len, /* fallible */ false);
 }
 
 static zend_always_inline zend_string *zend_string_copy(zend_string *s)
 {
-	if (!IS_INTERNED(s)) {
-		GC_REFCOUNT(s)++;
+	if (!ZSTR_IS_INTERNED(s)) {
+		GC_ADDREF(s);
 	}
 	return s;
 }
 
-static zend_always_inline zend_string *zend_string_dup(zend_string *s, int persistent)
+static zend_always_inline zend_string *zend_string_dup(zend_string *s, bool persistent)
 {
-	if (IS_INTERNED(s)) {
+	if (ZSTR_IS_INTERNED(s)) {
 		return s;
 	} else {
-		return zend_string_init(s->val, s->len, persistent);
+		return zend_string_init(ZSTR_VAL(s), ZSTR_LEN(s), persistent);
 	}
 }
 
-static zend_always_inline zend_string *zend_string_realloc(zend_string *s, size_t len, int persistent)
+static zend_always_inline zend_string *zend_string_separate(zend_string *s, bool persistent)
+{
+	if (ZSTR_IS_INTERNED(s) || GC_REFCOUNT(s) > 1) {
+		if (!ZSTR_IS_INTERNED(s)) {
+			GC_DELREF(s);
+		}
+		return zend_string_init(ZSTR_VAL(s), ZSTR_LEN(s), persistent);
+	}
+
+	zend_string_forget_hash_val(s);
+	return s;
+}
+
+static zend_always_inline zend_string *zend_string_frealloc(zend_string *s, size_t len, bool persistent, bool fallible)
 {
 	zend_string *ret;
 
-	if (IS_INTERNED(s)) {
-		ret = zend_string_alloc(len, persistent);
-		memcpy(ret->val, s->val, (len > s->len ? s->len : len) + 1);
-	} else if (EXPECTED(GC_REFCOUNT(s) == 1)) {
-		ret = (zend_string *)perealloc(s, ZEND_MM_ALIGNED_SIZE(_STR_HEADER_SIZE + len + 1), persistent);
-		ret->len = len;
-		zend_string_forget_hash_val(ret);
-	} else {
-		ret = zend_string_alloc(len, persistent);
-		memcpy(ret->val, s->val, (len > s->len ? s->len : len) + 1);
-		GC_REFCOUNT(s)--;
+	if (!ZSTR_IS_INTERNED(s)) {
+		if (EXPECTED(GC_REFCOUNT(s) == 1)) {
+			ret = (zend_string *)safe_fperealloc(s, len, sizeof(char), ZEND_MM_ALIGNED_SIZE(_ZSTR_STRUCT_SIZE(0)), persistent, fallible);
+			if (ZEND_CONST_COND(fallible, true) && UNEXPECTED(!ret)) {
+				return NULL;
+			}
+			ZSTR_LEN(ret) = len;
+			zend_string_forget_hash_val(ret);
+			return ret;
+		}
+	}
+	ret = zend_string_falloc(len, persistent, fallible);
+	if (ZEND_CONST_COND(fallible, true) && UNEXPECTED(!ret)) {
+		return NULL;
+	}
+	memcpy(ZSTR_VAL(ret), ZSTR_VAL(s), MIN(len, ZSTR_LEN(s)) + 1);
+	if (!ZSTR_IS_INTERNED(s)) {
+		GC_DELREF(s);
 	}
 	return ret;
 }
 
-static zend_always_inline zend_string *zend_string_safe_realloc(zend_string *s, size_t n, size_t m, size_t l, int persistent)
+static zend_always_inline zend_string *zend_string_realloc(zend_string *s, size_t len, bool persistent)
+{
+	return zend_string_frealloc(s, len, persistent, /* fallible */ false);
+}
+
+static zend_always_inline zend_string *zend_string_fextend(zend_string *s, size_t len, bool persistent, bool fallible)
 {
 	zend_string *ret;
 
-	if (IS_INTERNED(s)) {
-		ret = zend_string_safe_alloc(n, m, l, persistent);
-		memcpy(ret->val, s->val, ((n * m) + l > (size_t)s->len ? (size_t)s->len : ((n * m) + l)) + 1);
-	} else if (GC_REFCOUNT(s) == 1) {
-		ret = (zend_string *)safe_perealloc(s, n, m, ZEND_MM_ALIGNED_SIZE(_STR_HEADER_SIZE + l + 1), persistent);
-		ret->len = (n * m) + l;
-		zend_string_forget_hash_val(ret);
-	} else {
-		ret = zend_string_safe_alloc(n, m, l, persistent);
-		memcpy(ret->val, s->val, ((n * m) + l > (size_t)s->len ? (size_t)s->len : ((n * m) + l)) + 1);
-		GC_REFCOUNT(s)--;
+	ZEND_ASSERT(len >= ZSTR_LEN(s));
+	if (!ZSTR_IS_INTERNED(s)) {
+		if (EXPECTED(GC_REFCOUNT(s) == 1)) {
+			ret = (zend_string *)safe_fperealloc(s, len, sizeof(char), ZEND_MM_ALIGNED_SIZE(_ZSTR_STRUCT_SIZE(0)), persistent, fallible);
+			if (ZEND_CONST_COND(fallible, true) && UNEXPECTED(!ret)) {
+				return NULL;
+			}
+			ZSTR_LEN(ret) = len;
+			zend_string_forget_hash_val(ret);
+			return ret;
+		}
+	}
+	ret = zend_string_falloc(len, persistent, fallible);
+	if (ZEND_CONST_COND(fallible, true) && UNEXPECTED(!ret)) {
+		return NULL;
+	}
+	memcpy(ZSTR_VAL(ret), ZSTR_VAL(s), ZSTR_LEN(s) + 1);
+	if (!ZSTR_IS_INTERNED(s)) {
+		GC_DELREF(s);
 	}
 	return ret;
+}
+
+static zend_always_inline zend_string *zend_string_extend(zend_string *s, size_t len, bool persistent)
+{
+	return zend_string_fextend(s, len, persistent, /* fallible */ false);
+}
+
+static zend_always_inline zend_string *zend_string_ftruncate(zend_string *s, size_t len, bool persistent, bool fallible)
+{
+	zend_string *ret;
+
+	ZEND_ASSERT(len <= ZSTR_LEN(s));
+	if (!ZSTR_IS_INTERNED(s)) {
+		if (EXPECTED(GC_REFCOUNT(s) == 1)) {
+			ret = (zend_string *)safe_fperealloc(s, len, sizeof(char), ZEND_MM_ALIGNED_SIZE(_ZSTR_STRUCT_SIZE(0)), persistent, fallible);
+			if (ZEND_CONST_COND(fallible, true) && UNEXPECTED(!ret)) {
+				return NULL;
+			}
+			ZSTR_LEN(ret) = len;
+			zend_string_forget_hash_val(ret);
+			return ret;
+		}
+	}
+	ret = zend_string_falloc(len, persistent, fallible);
+	if (ZEND_CONST_COND(fallible, true) && UNEXPECTED(!ret)) {
+		return NULL;
+	}
+	memcpy(ZSTR_VAL(ret), ZSTR_VAL(s), len + 1);
+	if (!ZSTR_IS_INTERNED(s)) {
+		GC_DELREF(s);
+	}
+	return ret;
+}
+
+static zend_always_inline zend_string *zend_string_truncate(zend_string *s, size_t len, bool persistent)
+{
+	return zend_string_ftruncate(s, len, persistent, /*fallible */ false);
+}
+
+static zend_always_inline zend_string *zend_string_safe_frealloc(zend_string *s, size_t n, size_t m, size_t l, bool persistent, bool fallible)
+{
+	zend_string *ret;
+
+	if (!ZSTR_IS_INTERNED(s)) {
+		if (GC_REFCOUNT(s) == 1) {
+			ret = (zend_string *)safe_fperealloc(s, n, m, ZEND_MM_ALIGNED_SIZE(_ZSTR_STRUCT_SIZE(l)), persistent, fallible);
+			if (ZEND_CONST_COND(fallible, true) && !ret) {
+				return NULL;
+			}
+			ZSTR_LEN(ret) = (n * m) + l;
+			zend_string_forget_hash_val(ret);
+			return ret;
+		}
+	}
+	ret = zend_string_safe_falloc(n, m, l, persistent, fallible);
+	if (ZEND_CONST_COND(fallible, true) && !ret) {
+		return NULL;
+	}
+	memcpy(ZSTR_VAL(ret), ZSTR_VAL(s), MIN((n * m) + l, ZSTR_LEN(s)) + 1);
+	if (!ZSTR_IS_INTERNED(s)) {
+		GC_DELREF(s);
+	}
+	return ret;
+}
+
+static zend_always_inline zend_string *zend_string_safe_realloc(zend_string *s, size_t n, size_t m, size_t l, bool persistent)
+{
+	return zend_string_safe_frealloc(s, n, m, l, persistent, /* fallible */ false);
+}
+
+static zend_always_inline char *zend_cstr_append_char(const char *str, size_t len, char c) {
+	char *res = (char *)safe_emalloc(len, sizeof(char), 2);
+	if (len > 0) {
+		memcpy(res, str, len);
+	}
+	res[len] = c;
+	res[len + 1] = '\0';
+	return res;
+}
+
+static zend_always_inline char *zend_cstr_concat(const char *s1, size_t len1, const char *s2, size_t len2) {
+	size_t size = zend_safe_address_guarded(1, len1, len2);
+	size = zend_safe_address_guarded(1, size, 1);
+	char *res = (char *)emalloc(size);
+	if (len1 > 0) {
+		memcpy(res, s1, len1);
+	}
+	if (len2 > 0) {
+		memcpy(res + len1, s2, len2);
+	}
+	res[len1 + len2] = '\0';
+	return res;
+}
+
+static zend_always_inline char *zend_cstr_concat3(const char *s1, size_t len1, const char *s2, size_t len2, const char *s3, size_t len3) {
+	size_t size = zend_safe_address_guarded(1, len1, len2);
+	size = zend_safe_address_guarded(1, size, len3);
+	size = zend_safe_address_guarded(1, size, 1);
+	char *res = (char *)emalloc(size);
+	if (len1 > 0) {
+		memcpy(res, s1, len1);
+	}
+	if (len2 > 0) {
+		memcpy(res + len1, s2, len2);
+	}
+	if (len3 > 0) {
+		memcpy(res + len1 + len2, s3, len3);
+	}
+	res[len1 + len2 + len3] = '\0';
+	return res;
 }
 
 static zend_always_inline void zend_string_free(zend_string *s)
 {
-	if (!IS_INTERNED(s)) {
+	if (!ZSTR_IS_INTERNED(s)) {
 		ZEND_ASSERT(GC_REFCOUNT(s) <= 1);
 		pefree(s, GC_FLAGS(s) & IS_STR_PERSISTENT);
 	}
 }
 
+static zend_always_inline void zend_string_efree(zend_string *s)
+{
+	ZEND_ASSERT(!ZSTR_IS_INTERNED(s));
+	ZEND_ASSERT(GC_REFCOUNT(s) <= 1);
+	ZEND_ASSERT(!(GC_FLAGS(s) & IS_STR_PERSISTENT));
+	efree(s);
+}
+
 static zend_always_inline void zend_string_release(zend_string *s)
 {
-	if (!IS_INTERNED(s)) {
-		if (--GC_REFCOUNT(s) == 0) {
+	if (!ZSTR_IS_INTERNED(s)) {
+		if (GC_DELREF(s) == 0) {
 			pefree(s, GC_FLAGS(s) & IS_STR_PERSISTENT);
 		}
 	}
 }
 
-static zend_always_inline zend_bool zend_string_equals(zend_string *s1, zend_string *s2)
+static zend_always_inline void zend_string_release_ex(zend_string *s, bool persistent)
 {
-	return s1 == s2 || (s1->len == s2->len && !memcmp(s1->val, s2->val, s1->len));
+	if (!ZSTR_IS_INTERNED(s)) {
+		if (GC_DELREF(s) == 0) {
+			if (persistent) {
+				ZEND_ASSERT(GC_FLAGS(s) & IS_STR_PERSISTENT);
+				free(s);
+			} else {
+				ZEND_ASSERT(!(GC_FLAGS(s) & IS_STR_PERSISTENT));
+				efree(s);
+			}
+		}
+	}
 }
 
-#define zend_string_equals_literal_ci(str, c) \
-	((str)->len == sizeof(c) - 1 && !zend_binary_strcasecmp((str)->val, (str)->len, (c), sizeof(c) - 1))
+static zend_always_inline bool zend_string_equals_cstr(const zend_string *s1, const char *s2, size_t s2_length)
+{
+	return ZSTR_LEN(s1) == s2_length && !memcmp(ZSTR_VAL(s1), s2, s2_length);
+}
+
+#if defined(__GNUC__) && (defined(__i386__) || (defined(__x86_64__) && !defined(__ILP32__)))
+BEGIN_EXTERN_C()
+ZEND_API bool ZEND_FASTCALL zend_string_equal_val(const zend_string *s1, const zend_string *s2);
+END_EXTERN_C()
+#else
+static zend_always_inline bool zend_string_equal_val(const zend_string *s1, const zend_string *s2)
+{
+	return !memcmp(ZSTR_VAL(s1), ZSTR_VAL(s2), ZSTR_LEN(s1));
+}
+#endif
+
+static zend_always_inline bool zend_string_equal_content(const zend_string *s1, const zend_string *s2)
+{
+	return ZSTR_LEN(s1) == ZSTR_LEN(s2) && zend_string_equal_val(s1, s2);
+}
+
+static zend_always_inline bool zend_string_equals(const zend_string *s1, const zend_string *s2)
+{
+	return s1 == s2 || zend_string_equal_content(s1, s2);
+}
+
+BEGIN_EXTERN_C()
+ZEND_API int ZEND_FASTCALL zend_binary_strcasecmp(const char *s1, size_t len1, const char *s2, size_t len2);
+END_EXTERN_C()
+
+static zend_always_inline bool zend_string_equals_cstr_ci(const zend_string *s1, const char *s2, size_t s2_length)
+{
+	return ZSTR_LEN(s1) == s2_length && !zend_binary_strcasecmp(ZSTR_VAL(s1), ZSTR_LEN(s1), s2, s2_length);
+}
+
+#define zend_string_equals_literal_ci(str, literal) \
+	zend_string_equals_cstr_ci(str, "" literal, sizeof(literal) - 1)
+
+static zend_always_inline bool zend_string_equals_ci(const zend_string *s1, const zend_string *s2)
+{
+	return zend_string_equals_cstr_ci(s1, ZSTR_VAL(s2), ZSTR_LEN(s2));
+}
 
 #define zend_string_equals_literal(str, literal) \
-	((str)->len == sizeof(literal)-1 && !memcmp((str)->val, literal, sizeof(literal) - 1))
+	zend_string_equals_cstr(str, "" literal, sizeof(literal) - 1)
+
+static zend_always_inline bool zend_string_starts_with_cstr(const zend_string *str, const char *prefix, size_t prefix_length)
+{
+	return ZSTR_LEN(str) >= prefix_length && !memcmp(ZSTR_VAL(str), prefix, prefix_length);
+}
+
+static zend_always_inline bool zend_string_starts_with(const zend_string *str, const zend_string *prefix)
+{
+	return zend_string_starts_with_cstr(str, ZSTR_VAL(prefix), ZSTR_LEN(prefix));
+}
+
+#define zend_string_starts_with_literal(str, prefix) \
+	zend_string_starts_with_cstr(str, "" prefix, sizeof(prefix) - 1)
+
+static zend_always_inline bool zend_string_starts_with_cstr_ci(const zend_string *str, const char *prefix, size_t prefix_length)
+{
+	return ZSTR_LEN(str) >= prefix_length && !strncasecmp(ZSTR_VAL(str), prefix, prefix_length);
+}
+
+static zend_always_inline bool zend_string_starts_with_ci(const zend_string *str, const zend_string *prefix)
+{
+	return zend_string_starts_with_cstr_ci(str, ZSTR_VAL(prefix), ZSTR_LEN(prefix));
+}
+
+#define zend_string_starts_with_literal_ci(str, prefix) \
+	zend_string_starts_with_cstr_ci(str, "" prefix, sizeof(prefix) - 1)
+
+static zend_always_inline bool zend_string_ends_with_cstr(const zend_string *str, const char *suffix, size_t suffix_length)
+{
+	return ZSTR_LEN(str) >= suffix_length && !memcmp(ZSTR_VAL(str) + ZSTR_LEN(str) - suffix_length, suffix, suffix_length);
+}
+
+static zend_always_inline bool zend_string_ends_with(const zend_string *str, const zend_string *suffix)
+{
+	return zend_string_ends_with_cstr(str, ZSTR_VAL(suffix), ZSTR_LEN(suffix));
+}
+
+#define zend_string_ends_with_literal(str, suffix) \
+	zend_string_ends_with_cstr(str, "" suffix, sizeof(suffix) - 1)
+
+static zend_always_inline bool zend_string_ends_with_cstr_ci(const zend_string *str, const char *suffix, size_t suffix_length)
+{
+	return ZSTR_LEN(str) >= suffix_length && !strncasecmp(ZSTR_VAL(str) + ZSTR_LEN(str) - suffix_length, suffix, suffix_length);
+}
+
+static zend_always_inline bool zend_string_ends_with_ci(const zend_string *str, const zend_string *suffix)
+{
+	return zend_string_ends_with_cstr_ci(str, ZSTR_VAL(suffix), ZSTR_LEN(suffix));
+}
+
+#define zend_string_ends_with_literal_ci(str, suffix) \
+	zend_string_ends_with_cstr_ci(str, "" suffix, sizeof(suffix) - 1)
 
 /*
  * DJBX33A (Daniel J. Bernstein, Times 33 with Addition)
@@ -233,7 +612,7 @@ static zend_always_inline zend_bool zend_string_equals(zend_string *s1, zend_str
  * constants, prime or not, has never been adequately explained by
  * anyone. So I try an explanation: if one experimentally tests all
  * multipliers between 1 and 256 (as RSE did now) one detects that even
- * numbers are not useable at all. The remaining 128 odd numbers
+ * numbers are not usable at all. The remaining 128 odd numbers
  * (except for the number 1) work more or less all equally well. They
  * all distribute in an acceptable way and this way fill a hash table
  * with an average percent of approx. 86%.
@@ -255,8 +634,71 @@ static zend_always_inline zend_bool zend_string_equals(zend_string *s1, zend_str
 
 static zend_always_inline zend_ulong zend_inline_hash_func(const char *str, size_t len)
 {
-	register zend_ulong hash = Z_UL(5381);
+	zend_ulong hash = Z_UL(5381);
 
+#if defined(_WIN32) || defined(__i386__) || defined(__x86_64__) || defined(__aarch64__)
+	/* Version with multiplication works better on modern CPU */
+	for (; len >= 8; len -= 8, str += 8) {
+# if defined(__aarch64__) && !defined(WORDS_BIGENDIAN)
+		/* On some architectures it is beneficial to load 8 bytes at a
+		   time and extract each byte with a bit field extract instr. */
+		uint64_t chunk;
+
+		memcpy(&chunk, str, sizeof(chunk));
+		hash =
+			hash                        * 33 * 33 * 33 * 33 +
+			((chunk >> (8 * 0)) & 0xff) * 33 * 33 * 33 +
+			((chunk >> (8 * 1)) & 0xff) * 33 * 33 +
+			((chunk >> (8 * 2)) & 0xff) * 33 +
+			((chunk >> (8 * 3)) & 0xff);
+		hash =
+			hash                        * 33 * 33 * 33 * 33 +
+			((chunk >> (8 * 4)) & 0xff) * 33 * 33 * 33 +
+			((chunk >> (8 * 5)) & 0xff) * 33 * 33 +
+			((chunk >> (8 * 6)) & 0xff) * 33 +
+			((chunk >> (8 * 7)) & 0xff);
+# else
+		hash =
+			hash   * Z_L(33 * 33 * 33 * 33) +
+			str[0] * Z_L(33 * 33 * 33) +
+			str[1] * Z_L(33 * 33) +
+			str[2] * Z_L(33) +
+			str[3];
+		hash =
+			hash   * Z_L(33 * 33 * 33 * 33) +
+			str[4] * Z_L(33 * 33 * 33) +
+			str[5] * Z_L(33 * 33) +
+			str[6] * Z_L(33) +
+			str[7];
+# endif
+	}
+	if (len >= 4) {
+		hash =
+			hash   * Z_L(33 * 33 * 33 * 33) +
+			str[0] * Z_L(33 * 33 * 33) +
+			str[1] * Z_L(33 * 33) +
+			str[2] * Z_L(33) +
+			str[3];
+		len -= 4;
+		str += 4;
+	}
+	if (len >= 2) {
+		if (len > 2) {
+			hash =
+				hash   * Z_L(33 * 33 * 33) +
+				str[0] * Z_L(33 * 33) +
+				str[1] * Z_L(33) +
+				str[2];
+		} else {
+			hash =
+				hash   * Z_L(33 * 33) +
+				str[0] * Z_L(33) +
+				str[1];
+		}
+	} else if (len != 0) {
+		hash = hash * Z_L(33) + *str;
+	}
+#else
 	/* variant with the hash unrolled eight times */
 	for (; len >= 8; len -= 8) {
 		hash = ((hash << 5) + hash) + *str++;
@@ -277,43 +719,126 @@ static zend_always_inline zend_ulong zend_inline_hash_func(const char *str, size
 		case 2: hash = ((hash << 5) + hash) + *str++; /* fallthrough... */
 		case 1: hash = ((hash << 5) + hash) + *str++; break;
 		case 0: break;
-EMPTY_SWITCH_DEFAULT_CASE()
+default: ZEND_UNREACHABLE();
 	}
+#endif
 
-	ZEND_ASSERT(hash != 0);
-	return hash;
-}
-
-static zend_always_inline void zend_interned_empty_string_init(zend_string **s)
-{
-	zend_string *str;
-
-	str = zend_string_alloc(sizeof("")-1, 1);
-	str->val[0] = '\000';
-
-#ifndef ZTS
-	*s = zend_new_interned_string(str);
+	/* Hash value can't be zero, so we always set the high bit */
+#if SIZEOF_ZEND_LONG == 8
+	return hash | Z_UL(0x8000000000000000);
+#elif SIZEOF_ZEND_LONG == 4
+	return hash | Z_UL(0x80000000);
 #else
-	zend_string_hash_val(str);
-	str->gc.u.v.flags |= IS_STR_INTERNED;
-	*s = str;
+# error "Unknown SIZEOF_ZEND_LONG"
 #endif
 }
 
-static zend_always_inline void zend_interned_empty_string_free(zend_string **s)
-{
-	if (NULL != *s) {
-		free(*s);
-		*s = NULL;
-	}
-}
+// When adding a new string here, please also update build/gen_stub.php to the
+// known strings to be used in property registration; see gh-15751
+#define ZEND_KNOWN_STRINGS(_) \
+	_(ZEND_STR_FILE,                   "file") \
+	_(ZEND_STR_LINE,                   "line") \
+	_(ZEND_STR_FUNCTION,               "function") \
+	_(ZEND_STR_CLASS,                  "class") \
+	_(ZEND_STR_OBJECT,                 "object") \
+	_(ZEND_STR_TYPE,                   "type") \
+	_(ZEND_STR_OBJECT_OPERATOR,        "->") \
+	_(ZEND_STR_PAAMAYIM_NEKUDOTAYIM,   "::") \
+	_(ZEND_STR_ARGS,                   "args") \
+	_(ZEND_STR_ARGUMENTS,              "arguments") \
+	_(ZEND_STR_UNKNOWN,                "unknown") \
+	_(ZEND_STR_UNKNOWN_CAPITALIZED,    "Unknown") \
+	_(ZEND_STR_EXIT,                   "exit") \
+	_(ZEND_STR_CLONE,                  "clone") \
+	_(ZEND_STR_EVAL,                   "eval") \
+	_(ZEND_STR_INCLUDE,                "include") \
+	_(ZEND_STR_REQUIRE,                "require") \
+	_(ZEND_STR_INCLUDE_ONCE,           "include_once") \
+	_(ZEND_STR_REQUIRE_ONCE,           "require_once") \
+	_(ZEND_STR_SCALAR,                 "scalar") \
+	_(ZEND_STR_ERROR_REPORTING,        "error_reporting") \
+	_(ZEND_STR_STATIC,                 "static") \
+	_(ZEND_STR_THIS,                   "this") \
+	_(ZEND_STR_VALUE,                  "value") \
+	_(ZEND_STR_KEY,                    "key") \
+	_(ZEND_STR_MAGIC_INVOKE,           "__invoke") \
+	_(ZEND_STR_PREVIOUS,               "previous") \
+	_(ZEND_STR_CODE,                   "code") \
+	_(ZEND_STR_MESSAGE,                "message") \
+	_(ZEND_STR_SEVERITY,               "severity") \
+	_(ZEND_STR_STRING,                 "string") \
+	_(ZEND_STR_TRACE,                  "trace") \
+	_(ZEND_STR_SCHEME,                 "scheme") \
+	_(ZEND_STR_HOST,                   "host") \
+	_(ZEND_STR_PORT,                   "port") \
+	_(ZEND_STR_USER,                   "user") \
+	_(ZEND_STR_USERNAME,               "username") \
+	_(ZEND_STR_PASS,                   "pass") \
+	_(ZEND_STR_PASSWORD,               "password") \
+	_(ZEND_STR_PATH,                   "path") \
+	_(ZEND_STR_QUERY,                  "query") \
+	_(ZEND_STR_FRAGMENT,               "fragment") \
+	_(ZEND_STR_NULL,                   "NULL") \
+	_(ZEND_STR_BOOLEAN,                "boolean") \
+	_(ZEND_STR_INTEGER,                "integer") \
+	_(ZEND_STR_DOUBLE,                 "double") \
+	_(ZEND_STR_ARRAY,                  "array") \
+	_(ZEND_STR_RESOURCE,               "resource") \
+	_(ZEND_STR_CLOSED_RESOURCE,        "resource (closed)") \
+	_(ZEND_STR_NAME,                   "name") \
+	_(ZEND_STR_ARGV,                   "argv") \
+	_(ZEND_STR_ARGC,                   "argc") \
+	_(ZEND_STR_ARRAY_CAPITALIZED,      "Array") \
+	_(ZEND_STR_BOOL,                   "bool") \
+	_(ZEND_STR_INT,                    "int") \
+	_(ZEND_STR_FLOAT,                  "float") \
+	_(ZEND_STR_CALLABLE,               "callable") \
+	_(ZEND_STR_ITERABLE,               "iterable") \
+	_(ZEND_STR_VOID,                   "void") \
+	_(ZEND_STR_NEVER,                  "never") \
+	_(ZEND_STR_FALSE,                  "false") \
+	_(ZEND_STR_TRUE,                   "true") \
+	_(ZEND_STR_NULL_LOWERCASE,         "null") \
+	_(ZEND_STR_MIXED,                  "mixed") \
+	_(ZEND_STR_TRAVERSABLE,            "Traversable") \
+	_(ZEND_STR_SELF,                   "self") \
+	_(ZEND_STR_PARENT,                 "parent") \
+	_(ZEND_STR_SLEEP,                  "__sleep") \
+	_(ZEND_STR_WAKEUP,                 "__wakeup") \
+	_(ZEND_STR_CASES,                  "cases") \
+	_(ZEND_STR_FROM,                   "from") \
+	_(ZEND_STR_TRYFROM,                "tryFrom") \
+	_(ZEND_STR_TRYFROM_LOWERCASE,      "tryfrom") \
+	_(ZEND_STR_AUTOGLOBAL_SERVER,      "_SERVER") \
+	_(ZEND_STR_AUTOGLOBAL_ENV,         "_ENV") \
+	_(ZEND_STR_AUTOGLOBAL_REQUEST,     "_REQUEST") \
+	_(ZEND_STR_COUNT,                  "count") \
+	_(ZEND_STR_FUNC_NUM_ARGS,          "func_num_args") \
+	_(ZEND_STR_FUNC_GET_ARGS,          "func_get_args") \
+	_(ZEND_STR_ASSERT,                 "assert") \
+	_(ZEND_STR_CALL_USER_FUNC,         "call_user_func") \
+	_(ZEND_STR_ARRAY_SLICE,            "array_slice") \
+	_(ZEND_STR_SENSITIVEPARAMETER,     "SensitiveParameter") \
+	_(ZEND_STR_CONST_EXPR_PLACEHOLDER, "[constant expression]") \
+	_(ZEND_STR_DEPRECATED_CAPITALIZED, "Deprecated") \
+	_(ZEND_STR_SINCE,                  "since") \
+	_(ZEND_STR_NODISCARD,              "NoDiscard") \
+	_(ZEND_STR_GET,                    "get") \
+	_(ZEND_STR_SET,                    "set") \
+	_(ZEND_STR_8_DOT_0,                "8.0") \
+	_(ZEND_STR_8_DOT_1,                "8.1") \
+	_(ZEND_STR_8_DOT_2,                "8.2") \
+	_(ZEND_STR_8_DOT_3,                "8.3") \
+	_(ZEND_STR_8_DOT_4,                "8.4") \
+	_(ZEND_STR_8_DOT_5,                "8.5") \
+	_(ZEND_STR_8_DOT_6,                "8.6") \
+
+
+typedef enum _zend_known_string_id {
+#define _ZEND_STR_ID(id, str) id,
+ZEND_KNOWN_STRINGS(_ZEND_STR_ID)
+#undef _ZEND_STR_ID
+	ZEND_STR_LAST_KNOWN
+} zend_known_string_id;
 
 #endif /* ZEND_STRING_H */
-
-/*
- * Local variables:
- * tab-width: 4
- * c-basic-offset: 4
- * indent-tabs-mode: t
- * End:
- */

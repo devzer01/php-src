@@ -1,7 +1,9 @@
 --TEST--
 Test session_status() function : active, none
+--EXTENSIONS--
+session
 --SKIPIF--
-<?php include('skipif.inc'); ?>
+<?php include 'skipif.inc'; ?>
 --FILE--
 <?php
 
@@ -17,7 +19,7 @@ session_start();
 var_dump(session_status() == PHP_SESSION_ACTIVE);
 
 ?>
---EXPECTF--
+--EXPECT--
 *** Testing session_status() : active, none
 bool(true)
 bool(true)

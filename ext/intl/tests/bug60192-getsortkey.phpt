@@ -1,20 +1,22 @@
 --TEST--
 Bug #60192 (SegFault when Collator not constructed properly)
---SKIPIF--
-<?php
-	if (!extension_loaded('intl')) { die('skip intl extension not available'); }
-?>
+--EXTENSIONS--
+intl
 --FILE--
 <?php
 
 class Collator2 extends Collator{
-	public function __construct() {
-		// omitting parent::__construct($someLocale);
-	}
+    public function __construct() {
+        // omitting parent::__construct($someLocale);
+    }
 }
 
 $c = new Collator2();
-$c->getSortKey('h');
---EXPECTF--
-
-Catchable fatal error: Collator::getSortKey(): Object not initialized in %s on line %d
+try {
+	$c->getSortKey('h');
+} catch (Throwable $e) {
+	echo $e::class, ': ', $e->getMessage(), PHP_EOL;
+}
+?>
+--EXPECT--
+Error: Object not initialized

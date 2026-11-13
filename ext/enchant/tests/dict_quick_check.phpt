@@ -1,8 +1,13 @@
 --TEST--
 enchant_dict_quick_check() basic test
+--CREDITS--
+marcosptf - <marcosptf@yahoo.com.br>
+--EXTENSIONS--
+enchant
 --SKIPIF--
 <?php
-if(!extension_loaded('enchant')) die('skip, enchant not loader');
+if (getenv('SKIP_ASAN')) die('xleak Known libenchant memory leak');
+if (!enchant_broker_list_dicts(enchant_broker_init())) {die("skip no dictionary installed on this machine! \n");}
 
 $tag = 'en_US';
 $r = enchant_broker_init();

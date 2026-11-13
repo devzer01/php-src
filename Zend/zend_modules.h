@@ -2,22 +2,19 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2015 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright © Zend Technologies Ltd., a subsidiary company of          |
+   |     Perforce Software, Inc., and Contributors.                       |
    +----------------------------------------------------------------------+
-   | This source file is subject to version 2.00 of the Zend license,     |
-   | that is bundled with this package in the file LICENSE, and is        |
-   | available through the world-wide-web at the following url:           |
-   | http://www.zend.com/license/2_00.txt.                                |
-   | If you did not receive a copy of the Zend license and are unable to  |
-   | obtain it through the world-wide-web, please send a note to          |
-   | license@zend.com so we can mail you a copy immediately.              |
+   | This source file is subject to the Modified BSD License that is      |
+   | bundled with this package in the file LICENSE, and is available      |
+   | through the World Wide Web at <https://www.php.net/license/>.        |
+   |                                                                      |
+   | SPDX-License-Identifier: BSD-3-Clause                                |
    +----------------------------------------------------------------------+
-   | Authors: Andi Gutmans <andi@zend.com>                                |
-   |          Zeev Suraski <zeev@zend.com>                                |
+   | Authors: Andi Gutmans <andi@php.net>                                 |
+   |          Zeev Suraski <zeev@php.net>                                 |
    +----------------------------------------------------------------------+
 */
-
-/* $Id$ */
 
 #ifndef MODULES_H
 #define MODULES_H
@@ -33,7 +30,7 @@
 #define ZEND_MODULE_INFO_FUNC_ARGS zend_module_entry *zend_module
 #define ZEND_MODULE_INFO_FUNC_ARGS_PASSTHRU zend_module
 
-#define ZEND_MODULE_API_NO 20141001
+#define ZEND_MODULE_API_NO 20261113
 #ifdef ZTS
 #define USING_ZTS 1
 #else
@@ -48,7 +45,12 @@
 
 #define ZEND_MODULE_BUILD_ID "API" ZEND_TOSTR(ZEND_MODULE_API_NO) ZEND_BUILD_TS ZEND_BUILD_DEBUG ZEND_BUILD_SYSTEM ZEND_BUILD_EXTRA
 
-#define STANDARD_MODULE_PROPERTIES_EX 0, 0, NULL, 0, ZEND_MODULE_BUILD_ID
+#define STANDARD_MODULE_PROPERTIES_EX \
+	.module_started = 0, \
+	.type = 0, \
+	.handle = NULL, \
+	.module_number = 0, \
+	.build_id = ZEND_MODULE_BUILD_ID
 
 #define NO_MODULE_GLOBALS 0, NULL, NULL, NULL
 
@@ -79,10 +81,10 @@ struct _zend_module_entry {
 	const struct _zend_module_dep *deps;
 	const char *name;
 	const struct _zend_function_entry *functions;
-	int (*module_startup_func)(INIT_FUNC_ARGS);
-	int (*module_shutdown_func)(SHUTDOWN_FUNC_ARGS);
-	int (*request_startup_func)(INIT_FUNC_ARGS);
-	int (*request_shutdown_func)(SHUTDOWN_FUNC_ARGS);
+	zend_result (*module_startup_func)(INIT_FUNC_ARGS);
+	zend_result (*module_shutdown_func)(SHUTDOWN_FUNC_ARGS);
+	zend_result (*request_startup_func)(INIT_FUNC_ARGS);
+	zend_result (*request_shutdown_func)(SHUTDOWN_FUNC_ARGS);
 	void (*info_func)(ZEND_MODULE_INFO_FUNC_ARGS);
 	const char *version;
 	size_t globals_size;
@@ -93,7 +95,8 @@ struct _zend_module_entry {
 #endif
 	void (*globals_ctor)(void *global);
 	void (*globals_dtor)(void *global);
-	int (*post_deactivate_func)(void);
+	zend_result (*post_deactivate_func)(void);
+	void (*child_init_func)(void);
 	int module_started;
 	unsigned char type;
 	void *handle;
@@ -122,18 +125,12 @@ struct _zend_module_dep {
 	unsigned char type;		/* dependency type */
 };
 
+BEGIN_EXTERN_C()
 extern ZEND_API HashTable module_registry;
 
 void module_destructor(zend_module_entry *module);
 int module_registry_request_startup(zend_module_entry *module);
-int module_registry_unload_temp(const zend_module_entry *module);
+void module_registry_unload(const zend_module_entry *module);
+END_EXTERN_C()
 
 #endif
-
-/*
- * Local variables:
- * tab-width: 4
- * c-basic-offset: 4
- * indent-tabs-mode: t
- * End:
- */

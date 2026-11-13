@@ -42,7 +42,7 @@ array(16) {
   ["zone_type"]=>
   int(2)
   ["zone"]=>
-  int(-60)
+  int(3600)
   ["is_dst"]=>
   bool(false)
   ["tz_abbr"]=>
@@ -69,9 +69,11 @@ array(12) {
   array(0) {
   }
   ["error_count"]=>
-  int(0)
+  int(1)
   ["errors"]=>
-  array(0) {
+  array(1) {
+    [0]=>
+    string(12) "Empty string"
   }
   ["is_localtime"]=>
   bool(false)

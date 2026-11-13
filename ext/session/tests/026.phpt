@@ -1,7 +1,9 @@
 --TEST--
 correct instantiation of references between variables in sessions
+--EXTENSIONS--
+session
 --SKIPIF--
-<?php include('skipif.inc'); ?>
+<?php include 'skipif.inc'; ?>
 --INI--
 session.use_cookies=0
 session.use_strict_mode=0
@@ -11,21 +13,22 @@ session.save_handler=files
 --FILE--
 <?php
 error_reporting(E_ALL);
+ob_start();
 
-session_id("abtest");
+session_id("test026");
 session_start();
 
 class a {
     public $test = "hallo";
 }
- 
+
 class b {
     public $a;
-    function b(&$a) {
+    function __construct(&$a) {
         $this->a = &$a;
     }
 }
- 
+
 $a = new a();
 $b = new b($a);
 

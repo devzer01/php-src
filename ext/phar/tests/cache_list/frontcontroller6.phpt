@@ -2,8 +2,8 @@
 Phar front controller 404 [cache_list]
 --INI--
 phar.cache_list={PWD}/frontcontroller6.php
---SKIPIF--
-<?php if (!extension_loaded("phar")) die("skip"); ?>
+--EXTENSIONS--
+phar
 --ENV--
 SCRIPT_NAME=/frontcontroller6.php
 REQUEST_URI=/frontcontroller6.php/notfound.php
@@ -18,6 +18,6 @@ Status: 404 Not Found
   <title>File Not Found</title>
  </head>
  <body>
-  <h1>404 - File /notfound.php Not Found</h1>
+  <h1>404 - File Not Found</h1>
  </body>
 </html>

@@ -6,18 +6,18 @@ BEGIN {
 	SUBSEP=":";
 }
 
-function get_deps(module_name,       depline, cmd)
+function get_deps(module_name, module_dir,       depline, cmd)
 {
 	# this could probably be made *much* better
 	RS=orig_rs;
-	FS="[(,) \t]+"
-	cmd = "grep PHP_ADD_EXTENSION_DEP ext/" module_name "/config*.m4"
+	FS="[ \t]*[(,)][ \t]*"
+	cmd = "grep PHP_ADD_EXTENSION_DEP " module_dir "/config*.m4"
 	while (cmd | getline) {
-#		printf("GOT: %s,%s,%s,%s,%s\n", $1, $2, $3, $4, $5);
-		if (!length($5)) {
-			$5 = 0;
+		#printf("GOT: %s,%s,%s,%s\n", $1, $2, $3, $4);
+		if (!length($4)) {
+			$4 = 0;
 		}
-		mod_deps[module_name, $4] = $5;
+		mod_deps[module_name, $3] = $4;
 	}
 	close(cmd)
 	RS=" ";
@@ -63,19 +63,21 @@ function count(arr,       n, i)
 	return n;
 }
 
-/^[a-zA-Z0-9_-]+/ {
+/^[a-zA-Z0-9_;-]+/ {
+	split($1, mod, ";");
+
 	# mini hack for pedantic awk
-	gsub("[^a-zA-Z0-9_-]", "", $1)
+	gsub("[^a-zA-Z0-9_-]", "", mod[1])
 	# add each item to array
-	mods[mod_count++] = $1
+	mods[mod_count++] = mod[1]
 
 	# see if it has any module deps
-	get_deps($1);
+	get_deps(mod[1], mod[2]);
 }
 END {
 	# order it correctly
 	out_count = 0;
-	
+
 	while (count(mods)) {
 		for (i = 0; i <= mod_count - 1; i++) {
 			if (i in mods) {

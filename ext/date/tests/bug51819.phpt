@@ -23,12 +23,12 @@ foreach ($aTz as $sTz) {
     try {
         $oDateTime = new DateTime($sDate);
     } catch (Exception $oException) {
-        var_dump($oException->getMessage());
+        echo $oException::class, ': ', $oException->getMessage(), "\n";
         print_r(DateTime::getLastErrors());
     }
 }
 
 var_dump('this should be the only output');
 ?>
---EXPECTF--
+--EXPECT--
 string(30) "this should be the only output"

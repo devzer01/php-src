@@ -1,3 +1,17 @@
+/*
+   +----------------------------------------------------------------------+
+   | Copyright © The PHP Group and Contributors.                          |
+   +----------------------------------------------------------------------+
+   | This source file is subject to the Modified BSD License that is      |
+   | bundled with this package in the file LICENSE, and is available      |
+   | through the World Wide Web at <https://www.php.net/license/>.        |
+   |                                                                      |
+   | SPDX-License-Identifier: BSD-3-Clause                                |
+   +----------------------------------------------------------------------+
+   | Author: Zeev Suraski <zeev@php.net>                                  |
+   +----------------------------------------------------------------------+
+ */
+
 #include "php.h"
 #include "php_ini.h"
 #include "php_win32_globals.h"
@@ -23,7 +37,7 @@ static const char* registry_keys[] = {
 };
 
 static int OpenPhpRegistryKey(char* sub_key, HKEY *hKey)
-{
+{/*{{{*/
 	const char **key_name = registry_keys;
 
 	if (sub_key) {
@@ -35,9 +49,9 @@ static int OpenPhpRegistryKey(char* sub_key, HKEY *hKey)
 			LONG ret;
 
 			main_key_len = strlen(*key_name);
-			reg_key = emalloc(main_key_len + sub_key_len + 1);
-			memcpy(reg_key, *key_name, main_key_len);
-			memcpy(reg_key + main_key_len, sub_key, sub_key_len + 1);
+			reg_key = zend_cstr_concat(
+				*key_name, main_key_len,
+				sub_key, sub_key_len);
 			ret = RegOpenKeyEx(HKEY_LOCAL_MACHINE, reg_key, 0, KEY_READ, hKey);
 			efree(reg_key);
 
@@ -55,10 +69,10 @@ static int OpenPhpRegistryKey(char* sub_key, HKEY *hKey)
 		}
 	}
 	return 0;
-}
+}/*}}}*/
 
 static int LoadDirectory(HashTable *directories, HKEY key, char *path, int path_len, HashTable *parent_ht)
-{
+{/*{{{*/
 	DWORD keys, values, max_key, max_name, max_value;
 	int ret = 0;
 	HashTable *ht = NULL;
@@ -70,13 +84,18 @@ static int LoadDirectory(HashTable *directories, HKEY key, char *path, int path_
 			char *name = (char*)emalloc(max_name+1);
 			char *value = (char*)emalloc(max_value+1);
 			DWORD name_len, type, value_len;
-			zval data;
 
 			for (i = 0; i < values; i++) {
 				name_len = max_name+1;
 				value_len = max_value+1;
-				if (RegEnumValue(key, i, name, &name_len, NULL, &type, value, &value_len) == ERROR_SUCCESS) {
+
+				memset(name, '\0', max_name+1);
+				memset(value, '\0', max_value+1);
+
+				if (RegEnumValue(key, i, name, &name_len, NULL, &type, (LPBYTE) value, &value_len) == ERROR_SUCCESS) {
 					if ((type == REG_SZ) || (type == REG_EXPAND_SZ)) {
+						zval data;
+
 						if (!ht) {
 							ht = (HashTable*)malloc(sizeof(HashTable));
 							if (!ht) {
@@ -84,6 +103,7 @@ static int LoadDirectory(HashTable *directories, HKEY key, char *path, int path_
 							}
 							zend_hash_init(ht, 0, NULL, ZVAL_INTERNAL_PTR_DTOR, 1);
 						}
+						ZVAL_PSTRINGL(&data, value, value_len-1);
 						zend_hash_str_update(ht, name, name_len, &data);
 					}
 				}
@@ -91,14 +111,14 @@ static int LoadDirectory(HashTable *directories, HKEY key, char *path, int path_
 			if (ht) {
 				if (parent_ht) {
 					zend_string *index;
-					ulong num;
+					zend_ulong num;
 					zval *tmpdata;
 
-					ZEND_HASH_FOREACH_KEY_VAL(parent_ht, num, index, tmpdata) {
+					ZEND_HASH_MAP_FOREACH_KEY_VAL(parent_ht, num, index, tmpdata) {
 						zend_hash_add(ht, index, tmpdata);
 					} ZEND_HASH_FOREACH_END();
 				}
-				zend_hash_str_update_mem(directories, path, path_len + 1, &ht, sizeof(HashTable*));
+				zend_hash_str_update_mem(directories, path, path_len, ht, sizeof(HashTable));
 				ret = 1;
 			}
 
@@ -144,22 +164,21 @@ static int LoadDirectory(HashTable *directories, HKEY key, char *path, int path_
 		}
 	}
 	return ret;
-}
+}/*}}}*/
 
 static void delete_internal_hashtable(zval *zv)
-{
-	void *data = Z_PTR_P(zv);
-	zend_hash_destroy(*(HashTable**)data);
-	free(*(HashTable**)data);
-}
+{/*{{{*/
+	HashTable *ht = (HashTable *)Z_PTR_P(zv);
+	zend_hash_destroy(ht);
+	free(ht);
+}/*}}}*/
 
 #define RegNotifyFlags (REG_NOTIFY_CHANGE_NAME | REG_NOTIFY_CHANGE_ATTRIBUTES | REG_NOTIFY_CHANGE_LAST_SET)
 
 void UpdateIniFromRegistry(char *path)
-{
+{/*{{{*/
 	char *p, *orig_path;
 	int path_len;
-	HashTable *pht;
 
 	if(!path) {
 		return;
@@ -234,50 +253,40 @@ void UpdateIniFromRegistry(char *path)
 		path_len++;
 	}
 	zend_str_tolower(path, path_len);
-	while (path_len >= 0) {
-		pht = (HashTable *)zend_hash_str_find_ptr(PW32G(registry_directories), path, path_len+1);
-		if (pht != NULL) {
-			HashTable *ht = pht;
+
+	while (path_len > 0) {
+		HashTable *ht = (HashTable *)zend_hash_str_find_ptr(PW32G(registry_directories), path, path_len);
+
+		if (ht != NULL) {
 			zend_string *index;
-			zend_ulong num;
 			zval *data;
 
-			ZEND_HASH_FOREACH_KEY_VAL(ht, num, index, data) {
-				zend_alter_ini_entry(index, Z_STR_P(data), PHP_INI_SYSTEM, PHP_INI_STAGE_ACTIVATE);
+			ZEND_HASH_MAP_FOREACH_STR_KEY_VAL(ht, index, data) {
+				zend_alter_ini_entry(index, Z_STR_P(data), PHP_INI_USER, PHP_INI_STAGE_ACTIVATE);
 			} ZEND_HASH_FOREACH_END();
-/*
-			for (zend_hash_internal_pointer_reset_ex(ht, &pos);
-			     zend_hash_get_current_data_ex(ht, (void**)&data, &pos) == SUCCESS &&
-			     zend_hash_get_current_key_ex(ht, &index, &index_len, &num, 0, &pos) == HASH_KEY_IS_STRING;
-			     zend_hash_move_forward_ex(ht, &pos)) {
-				zend_alter_ini_entry(index, index_len, Z_STRVAL_PP(data), Z_STRLEN_PP(data), PHP_INI_SYSTEM, PHP_INI_STAGE_ACTIVATE);
-			}
-			break;
-*/
 		}
 
-		if (--path_len > 0) {
-			while (path_len > 0 && path[path_len] != '/') {
-				path_len--;
-			}
-		}
+		do {
+			path_len--;
+		} while (path_len > 0 && path[path_len] != '/');
 		path[path_len] = 0;
 	}
 
 	efree(orig_path);
-}
+}/*}}}*/
 
 #define PHPRC_REGISTRY_NAME "IniFilePath"
 
 char *GetIniPathFromRegistry()
-{
+{/*{{{*/
 	char *reg_location = NULL;
 	HKEY hKey;
 
 	if (OpenPhpRegistryKey(NULL, &hKey)) {
 		DWORD buflen = MAXPATHLEN;
 		reg_location = emalloc(MAXPATHLEN+1);
-		if(RegQueryValueEx(hKey, PHPRC_REGISTRY_NAME, 0, NULL, reg_location, &buflen) != ERROR_SUCCESS) {
+		if(RegQueryValueEx(hKey, PHPRC_REGISTRY_NAME, 0, NULL, (LPBYTE) reg_location, &buflen) != ERROR_SUCCESS) {
+			RegCloseKey(hKey);
 			efree(reg_location);
 			reg_location = NULL;
 			return reg_location;
@@ -285,4 +294,4 @@ char *GetIniPathFromRegistry()
 		RegCloseKey(hKey);
 	}
 	return reg_location;
-}
+}/*}}}*/

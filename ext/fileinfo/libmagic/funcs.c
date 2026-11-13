@@ -27,99 +27,205 @@
 #include "file.h"
 
 #ifndef	lint
-FILE_RCSID("@(#)$File: funcs.c,v 1.68 2014/02/18 11:09:31 kim Exp $")
+FILE_RCSID("@(#)$File: funcs.c,v 1.153 2026/05/25 14:07:05 christos Exp $")
 #endif	/* lint */
 
 #include "magic.h"
+#include "swap.h"
+#include <assert.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>	/* for pipe2() */
+#endif
 #if defined(HAVE_WCHAR_H)
 #include <wchar.h>
 #endif
 #if defined(HAVE_WCTYPE_H)
 #include <wctype.h>
 #endif
-#if defined(HAVE_LOCALE_H)
-#include <locale.h>
-#endif
+#include <limits.h>
 
 #ifndef SIZE_MAX
-# define SIZE_MAX ((size_t) -1)
+#define SIZE_MAX	((size_t)~0)
 #endif
 
-#include "php.h"
-#include "main/php_network.h"
-
-#ifndef PREG_OFFSET_CAPTURE
-# define PREG_OFFSET_CAPTURE                 (1<<8)
-#endif
-
-extern public void convert_libmagic_pattern(zval *pattern, char *val, int len, int options);
-
-protected int
-file_printf(struct magic_set *ms, const char *fmt, ...)
+file_protected int
+file_bigendian(void)
 {
-	va_list ap;
-	int len;
-	char *buf = NULL, *newstr;
+	union {
+		unsigned short x;
+		unsigned char s[sizeof(unsigned short)];
+	} u;
 
-	va_start(ap, fmt);
-	len = vspprintf(&buf, 0, fmt, ap);
-	va_end(ap);
+	u.x = 1;
+	return u.s[0] != 1;
+}
 
-	if (ms->o.buf != NULL) {
-		len = spprintf(&newstr, 0, "%s%s", ms->o.buf, (buf ? buf : ""));
-		if (buf) {
-			efree(buf);
+file_protected char *
+file_copystr(char *buf, size_t blen, size_t width, const char *str)
+{
+	if (blen == 0)
+		return buf;
+	if (width >= blen)
+		width = blen - 1;
+	memcpy(buf, str, width);
+	buf[width] = '\0';
+	return buf;
+}
+
+file_private void
+file_clearbuf(struct magic_set *ms)
+{
+	efree(ms->o.buf);
+	ms->o.buf = NULL;
+	ms->o.blen = 0;
+}
+
+file_private int
+file_checkfield(char *msg, size_t mlen, const char *what, const char **pp)
+{
+	const char *p = *pp;
+	int fw = 0;
+
+	while (*p && isdigit((unsigned char)*p)) {
+		fw = fw * 10 + (*p++ - '0');
+		if (fw > 1024)
+			break;
+	}
+
+	*pp = p;
+
+	if (fw < 1024)
+		return 1;
+	if (msg)
+		snprintf(msg, mlen, "field %s too large: %d", what, fw);
+
+	return 0;
+}
+
+file_protected int
+file_checkfmt(char *msg, size_t mlen, const char *fmt)
+{
+	const char *p;
+	for (p = fmt; *p; p++) {
+		if (*p != '%')
+			continue;
+		if (*++p == '%')
+			continue;
+		if (*p == '\0') {
+			if (msg)
+				snprintf(msg, mlen, "incomplete %% format");
+			return -1;
 		}
-		efree(ms->o.buf);
-		ms->o.buf = newstr;
-	} else {
-		ms->o.buf = buf;
+		// Skip uninteresting.
+		while (*p != '\0' && strchr("#0.'+- ", *p) != NULL)
+			p++;
+		if (*p == '*') {
+			if (msg)
+				snprintf(msg, mlen, "* not allowed in format");
+			return -1;
+		}
+
+		if (!file_checkfield(msg, mlen, "width", &p))
+			return -1;
+
+		if (*p == '.') {
+			p++;
+			if (!file_checkfield(msg, mlen, "precision", &p))
+				return -1;
+		}
+
+		if (!isalpha((unsigned char)*p)) {
+			if (msg)
+				snprintf(msg, mlen, "bad format char: %c", *p);
+			return -1;
+		}
 	}
 	return 0;
+}
+
+/*
+ * Like printf, only we append to a buffer.
+ */
+file_protected int
+file_vprintf(struct magic_set *ms, const char *fmt, va_list ap)
+{
+	size_t len;
+	char *buf, *newstr;
+	char tbuf[1024];
+
+	if (ms->event_flags & EVENT_HAD_ERR)
+		return 0;
+
+	if (file_checkfmt(tbuf, sizeof(tbuf), fmt)) {
+		file_clearbuf(ms);
+		file_error(ms, 0, "Bad magic format `%s' (%s)", fmt, tbuf);
+		return -1;
+	}
+
+	len = vspprintf(&buf, 0, fmt, ap);
+	if (len > 1024 || len + ms->o.blen > 1024 * 1024) {
+		size_t blen = ms->o.blen;
+		if (buf) efree(buf);
+		file_clearbuf(ms);
+		file_error(ms, 0, "Output buffer space exceeded %" SIZE_T_FORMAT "u+%"
+		    SIZE_T_FORMAT "u", len, blen);
+		return -1;
+	}
+
+	if (ms->o.buf != NULL) {
+		len = spprintf(&newstr, 0, "%s%s", ms->o.buf, buf);
+		efree(buf);
+		efree(ms->o.buf);
+		buf = newstr;
+	}
+	ms->o.buf = buf;
+	ms->o.blen = len;
+	return 0;
+}
+
+file_protected int
+file_printf(struct magic_set *ms, const char *fmt, ...)
+{
+	int rv;
+	va_list ap;
+
+	va_start(ap, fmt);
+	rv = file_vprintf(ms, fmt, ap);
+	va_end(ap);
+	return rv;
 }
 
 /*
  * error - print best error message possible
  */
 /*VARARGS*/
-private void
+__attribute__((__format__(__printf__, 3, 0)))
+file_private void
 file_error_core(struct magic_set *ms, int error, const char *f, va_list va,
     size_t lineno)
 {
-	char *buf = NULL;
-
 	/* Only the first error is ok */
 	if (ms->event_flags & EVENT_HAD_ERR)
 		return;
 	if (lineno != 0) {
-		efree(ms->o.buf);
-		ms->o.buf = NULL;
-		file_printf(ms, "line %" SIZE_T_FORMAT "u: ", lineno);
+		file_clearbuf(ms);
+		(void)file_printf(ms, "line %" SIZE_T_FORMAT "u:", lineno);
 	}
-
-	vspprintf(&buf, 0, f, va);
-	va_end(va);
-
-	if (error > 0) {
-		file_printf(ms, "%s (%s)", (*buf ? buf : ""), strerror(error));
-	} else if (*buf) {
-		file_printf(ms, "%s", buf);
-	}
-
-	if (buf) {
-		efree(buf);
-	}
-
+	if (ms->o.buf && *ms->o.buf)
+		(void)file_printf(ms, " ");
+	(void)file_vprintf(ms, f, va);
+	if (error > 0)
+		(void)file_printf(ms, " (%s)", strerror(error));
 	ms->event_flags |= EVENT_HAD_ERR;
 	ms->error = error;
 }
 
 /*VARARGS*/
-protected void
+file_protected void
 file_error(struct magic_set *ms, int error, const char *f, ...)
 {
 	va_list va;
@@ -132,7 +238,7 @@ file_error(struct magic_set *ms, int error, const char *f, ...)
  * Print an error with magic line number.
  */
 /*VARARGS*/
-protected void
+file_protected void
 file_magerror(struct magic_set *ms, const char *f, ...)
 {
 	va_list va;
@@ -141,43 +247,125 @@ file_magerror(struct magic_set *ms, const char *f, ...)
 	va_end(va);
 }
 
-protected void
+file_protected void
 file_oomem(struct magic_set *ms, size_t len)
 {
 	file_error(ms, errno, "cannot allocate %" SIZE_T_FORMAT "u bytes",
 	    len);
 }
 
-protected void
+file_protected void
 file_badseek(struct magic_set *ms)
 {
 	file_error(ms, errno, "error seeking");
 }
 
-protected void
+file_protected void
 file_badread(struct magic_set *ms)
 {
 	file_error(ms, errno, "error reading");
 }
 
-protected int
-file_buffer(struct magic_set *ms, php_stream *stream, const char *inname, const void *buf,
-    size_t nb)
+#ifndef COMPILE_ONLY
+#define FILE_SEPARATOR "\n- "
+
+file_protected int
+file_separator(struct magic_set *ms)
+{
+	return file_printf(ms, FILE_SEPARATOR);
+}
+
+static void
+trim_separator(struct magic_set *ms)
+{
+	size_t l;
+
+	if (ms->o.buf == NULL)
+		return;
+
+	l = strlen(ms->o.buf);
+	if (l < sizeof(FILE_SEPARATOR))
+		return;
+
+	l -= sizeof(FILE_SEPARATOR) - 1;
+	if (strcmp(ms->o.buf + l, FILE_SEPARATOR) != 0)
+		return;
+
+	ms->o.buf[l] = '\0';
+}
+
+static int
+checkdone(struct magic_set *ms, int *rv)
+{
+	if ((ms->flags & MAGIC_CONTINUE) == 0)
+		return 1;
+	if (file_separator(ms) == -1)
+		*rv = -1;
+	return 0;
+}
+
+file_protected int
+file_default(struct magic_set *ms, size_t nb)
+{
+	if (ms->flags & MAGIC_MIME) {
+		if ((ms->flags & MAGIC_MIME_TYPE) &&
+		    file_printf(ms, "application/%s",
+			nb ? "octet-stream" : "x-empty") == -1)
+			return -1;
+		return 1;
+	}
+	if (ms->flags & MAGIC_APPLE) {
+		// This is not a typo: Type: UNKN Creator: UNKN
+		if (file_printf(ms, "UNKNUNKN") == -1)
+			return -1;
+		return 1;
+	}
+	if (ms->flags & MAGIC_EXTENSION) {
+		if (file_printf(ms, "???") == -1)
+			return -1;
+		return 1;
+	}
+	return 0;
+}
+
+/*
+ * The magic detection functions return:
+ *	 1: found
+ *	 0: not found
+ *	-1: error
+ */
+/*ARGSUSED*/
+file_protected int
+file_buffer(struct magic_set *ms, php_stream *stream, zend_stat_t *st,
+    const char *inname __attribute__ ((__unused__)),
+    const void *buf, size_t nb)
 {
 	int m = 0, rv = 0, looks_text = 0;
-	int mime = ms->flags & MAGIC_MIME;
-	const unsigned char *ubuf = CAST(const unsigned char *, buf);
-	unichar *u8buf = NULL;
-	size_t ulen;
 	const char *code = NULL;
 	const char *code_mime = "binary";
-	const char *type = "application/octet-stream";
 	const char *def = "data";
 	const char *ftype = NULL;
+	char *rbuf = NULL;
+	struct buffer b;
+	int fd = -1;
+
+	if (stream) {
+#ifdef _WIN64
+		php_socket_t _fd = fd;
+#else
+		int _fd;
+#endif
+		int _ret = php_stream_cast(stream, PHP_STREAM_AS_FD, (void **)&_fd, 0);
+		if (SUCCESS == _ret) {
+			fd = (int)_fd;
+		}
+	}
+
+	buffer_init(&b, fd, st, buf, nb);
+	ms->mode = b.st.st_mode;
 
 	if (nb == 0) {
 		def = "empty";
-		type = "application/x-empty";
 		goto simple;
 	} else if (nb == 1) {
 		def = "very short file (no magic)";
@@ -185,13 +373,16 @@ file_buffer(struct magic_set *ms, php_stream *stream, const char *inname, const 
 	}
 
 	if ((ms->flags & MAGIC_NO_CHECK_ENCODING) == 0) {
-		looks_text = file_encoding(ms, ubuf, nb, &u8buf, &ulen,
+		looks_text = file_encoding(ms, &b, NULL, 0,
 		    &code, &code_mime, &ftype);
 	}
 
 #ifdef __EMX__
 	if ((ms->flags & MAGIC_NO_CHECK_APPTYPE) == 0 && inname) {
-		switch (file_os2_apptype(ms, inname, buf, nb)) {
+		m = file_os2_apptype(ms, inname, &b);
+		if ((ms->flags & MAGIC_DEBUG) != 0)
+			(void)fprintf(stderr, "[try os2_apptype %d]\n", m);
+		switch (m) {
 		case -1:
 			return -1;
 		case 0:
@@ -202,92 +393,135 @@ file_buffer(struct magic_set *ms, php_stream *stream, const char *inname, const 
 	}
 #endif
 
-#if PHP_FILEINFO_UNCOMPRESS
-	if ((ms->flags & MAGIC_NO_CHECK_COMPRESS) == 0)
-		if ((m = file_zmagic(ms, stream, inname, ubuf, nb)) != 0) {
-			if ((ms->flags & MAGIC_DEBUG) != 0)
-				(void)fprintf(stderr, "zmagic %d\n", m);
+#ifdef PHP_FILEINFO_UNCOMPRESS
+	/* try compression stuff */
+	if ((ms->flags & MAGIC_NO_CHECK_COMPRESS) == 0) {
+		m = file_zmagic(ms, &b, inname);
+		if ((ms->flags & MAGIC_DEBUG) != 0)
+			(void)fprintf(stderr, "[try zmagic %d]\n", m);
+		if (m) {
 			goto done_encoding;
 		}
+	}
 #endif
 	/* Check if we have a tar file */
-	if ((ms->flags & MAGIC_NO_CHECK_TAR) == 0)
-		if ((m = file_is_tar(ms, ubuf, nb)) != 0) {
-			if ((ms->flags & MAGIC_DEBUG) != 0)
-				(void)fprintf(stderr, "tar %d\n", m);
-			goto done;
-		}
-
-	/* Check if we have a CDF file */
-	if ((ms->flags & MAGIC_NO_CHECK_CDF) == 0) {
-		php_socket_t fd;
-			if (stream && SUCCESS == php_stream_cast(stream, PHP_STREAM_AS_FD, (void **)&fd, 0)) {
-			if ((m = file_trycdf(ms, fd, ubuf, nb)) != 0) {
-				if ((ms->flags & MAGIC_DEBUG) != 0)
-					(void)fprintf(stderr, "cdf %d\n", m);
+	if ((ms->flags & MAGIC_NO_CHECK_TAR) == 0) {
+		m = file_is_tar(ms, &b);
+		if ((ms->flags & MAGIC_DEBUG) != 0)
+			(void)fprintf(stderr, "[try tar %d]\n", m);
+		if (m) {
+			if (checkdone(ms, &rv))
 				goto done;
-			}
 		}
 	}
 
-	/* try soft magic tests */
-	if ((ms->flags & MAGIC_NO_CHECK_SOFT) == 0)
-		if ((m = file_softmagic(ms, ubuf, nb, 0, BINTEST,
-		    looks_text)) != 0) {
-			if ((ms->flags & MAGIC_DEBUG) != 0)
-				(void)fprintf(stderr, "softmagic %d\n", m);
-#ifdef BUILTIN_ELF
-			if ((ms->flags & MAGIC_NO_CHECK_ELF) == 0 && m == 1 &&
-			    nb > 5 && fd != -1) {
-				/*
-				 * We matched something in the file, so this
-				 * *might* be an ELF file, and the file is at
-				 * least 5 bytes long, so if it's an ELF file
-				 * it has at least one byte past the ELF magic
-				 * number - try extracting information from the
-				 * ELF headers that cannot easily * be
-				 * extracted with rules in the magic file.
-				 */
-				if ((m = file_tryelf(ms, fd, ubuf, nb)) != 0)
-					if ((ms->flags & MAGIC_DEBUG) != 0)
-						(void)fprintf(stderr,
-						    "elf %d\n", m);
-			}
-#endif
-			goto done;
+	/* Check if we have a JSON file */
+	if ((ms->flags & MAGIC_NO_CHECK_JSON) == 0) {
+		m = file_is_json(ms, &b);
+		if ((ms->flags & MAGIC_DEBUG) != 0)
+			(void)fprintf(stderr, "[try json %d]\n", m);
+		if (m) {
+			if (checkdone(ms, &rv))
+				goto done;
 		}
+	}
+
+	/* Check if we have a CSV file */
+	if ((ms->flags & MAGIC_NO_CHECK_CSV) == 0) {
+		m = file_is_csv(ms, &b, looks_text, code);
+		if ((ms->flags & MAGIC_DEBUG) != 0)
+			(void)fprintf(stderr, "[try csv %d]\n", m);
+		if (m) {
+			if (checkdone(ms, &rv))
+				goto done;
+		}
+	}
+
+	/* Check if we have a SIMH tape file */
+	if ((ms->flags & MAGIC_NO_CHECK_SIMH) == 0) {
+		m = file_is_simh(ms, &b);
+		if ((ms->flags & MAGIC_DEBUG) != 0)
+			(void)fprintf(stderr, "[try simh %d]\n", m);
+		if (m) {
+			if (checkdone(ms, &rv))
+				goto done;
+		}
+	}
+
+	/* Check if we have a CDF file */
+	if ((ms->flags & MAGIC_NO_CHECK_CDF) == 0) {
+		m = file_trycdf(ms, &b);
+		if ((ms->flags & MAGIC_DEBUG) != 0)
+			(void)fprintf(stderr, "[try cdf %d]\n", m);
+		if (m) {
+			if (checkdone(ms, &rv))
+				goto done;
+		}
+	}
+#ifdef BUILTIN_ELF
+	if ((ms->flags & MAGIC_NO_CHECK_ELF) == 0 && nb > 5 && fd != -1) {
+		file_pushbuf_t *pb;
+		/*
+		 * We matched something in the file, so this
+		 * *might* be an ELF file, and the file is at
+		 * least 5 bytes long, so if it's an ELF file
+		 * it has at least one byte past the ELF magic
+		 * number - try extracting information from the
+		 * ELF headers that cannot easily be  extracted
+		 * with rules in the magic file. We we don't
+		 * print the information yet.
+		 */
+		if ((pb = file_push_buffer(ms)) == NULL)
+			return -1;
+
+		rv = file_tryelf(ms, &b);
+		rbuf = file_pop_buffer(ms, pb);
+		if (rv == -1) {
+			efree(rbuf);
+			rbuf = NULL;
+		}
+		if ((ms->flags & MAGIC_DEBUG) != 0)
+			(void)fprintf(stderr, "[try elf %d]\n", m);
+	}
+#endif
+
+	/* try soft magic tests */
+	if ((ms->flags & MAGIC_NO_CHECK_SOFT) == 0) {
+		m = file_softmagic(ms, &b, NULL, NULL, BINTEST, looks_text);
+		if ((ms->flags & MAGIC_DEBUG) != 0)
+			(void)fprintf(stderr, "[try softmagic %d]\n", m);
+		if (m == 1 && rbuf) {
+			if (file_printf(ms, "%s", rbuf) == -1)
+				goto done;
+		}
+		if (m) {
+			if (checkdone(ms, &rv))
+				goto done;
+		}
+	}
 
 	/* try text properties */
 	if ((ms->flags & MAGIC_NO_CHECK_TEXT) == 0) {
 
-		if ((m = file_ascmagic(ms, ubuf, nb, looks_text)) != 0) {
-			if ((ms->flags & MAGIC_DEBUG) != 0)
-				(void)fprintf(stderr, "ascmagic %d\n", m);
+		m = file_ascmagic(ms, &b, looks_text);
+		if ((ms->flags & MAGIC_DEBUG) != 0)
+			(void)fprintf(stderr, "[try ascmagic %d]\n", m);
+		if (m) {
 			goto done;
-		}
-
-		/* try to discover text encoding */
-		if ((ms->flags & MAGIC_NO_CHECK_ENCODING) == 0) {
-			if (looks_text == 0)
-				if ((m = file_ascmagic_with_encoding( ms, ubuf,
-				    nb, u8buf, ulen, code, ftype, looks_text))
-				    != 0) {
-					if ((ms->flags & MAGIC_DEBUG) != 0)
-						(void)fprintf(stderr,
-						    "ascmagic/enc %d\n", m);
-					goto done;
-				}
 		}
 	}
 
 simple:
 	/* give up */
-	m = 1;
-	if ((!mime || (mime & MAGIC_MIME_TYPE)) &&
-	    file_printf(ms, "%s", mime ? type : def) == -1) {
-	    rv = -1;
+	if (m == 0) {
+		m = 1;
+		rv = file_default(ms, nb);
+		if (rv == 0)
+			if (file_printf(ms, "%s", def) == -1)
+				rv = -1;
 	}
  done:
+	trim_separator(ms);
 	if ((ms->flags & MAGIC_MIME_ENCODING) != 0) {
 		if (ms->flags & MAGIC_MIME_TYPE)
 			if (file_printf(ms, "; charset=") == -1)
@@ -295,25 +529,26 @@ simple:
 		if (file_printf(ms, "%s", code_mime) == -1)
 			rv = -1;
 	}
+#ifdef PHP_FILEINFO_UNCOMPRESS
  done_encoding:
-	free(u8buf);
+#endif
+	efree(rbuf);
+	buffer_fini(&b);
 	if (rv)
 		return rv;
 
 	return m;
 }
+#endif
 
-protected int
-file_reset(struct magic_set *ms)
+file_protected int
+file_reset(struct magic_set *ms, int checkloaded)
 {
-	if (ms->mlist[0] == NULL) {
+	if (checkloaded && ms->mlist[0] == NULL) {
 		file_error(ms, 0, "no magic files loaded");
 		return -1;
 	}
-	if (ms->o.buf) {
-		efree(ms->o.buf);
-		ms->o.buf = NULL;
-	}
+	file_clearbuf(ms);
 	if (ms->o.pbuf) {
 		efree(ms->o.pbuf);
 		ms->o.pbuf = NULL;
@@ -326,15 +561,15 @@ file_reset(struct magic_set *ms)
 #define OCTALIFY(n, o)	\
 	/*LINTED*/ \
 	(void)(*(n)++ = '\\', \
-	*(n)++ = (((uint32_t)*(o) >> 6) & 3) + '0', \
-	*(n)++ = (((uint32_t)*(o) >> 3) & 7) + '0', \
-	*(n)++ = (((uint32_t)*(o) >> 0) & 7) + '0', \
+	*(n)++ = ((CAST(uint32_t, *(o)) >> 6) & 3) + '0', \
+	*(n)++ = ((CAST(uint32_t, *(o)) >> 3) & 7) + '0', \
+	*(n)++ = ((CAST(uint32_t, *(o)) >> 0) & 7) + '0', \
 	(o)++)
 
-protected const char *
+file_protected const char *
 file_getbuffer(struct magic_set *ms)
 {
-	char *op, *np;
+	char *pbuf, *op, *np;
 	size_t psize, len;
 
 	if (ms->event_flags & EVENT_HAD_ERR)
@@ -349,13 +584,15 @@ file_getbuffer(struct magic_set *ms)
 	/* * 4 is for octal representation, + 1 is for NUL */
 	len = strlen(ms->o.buf);
 	if (len > (SIZE_MAX - 1) / 4) {
+		file_oomem(ms, len);
 		return NULL;
 	}
 	psize = len * 4 + 1;
-	if ((ms->o.pbuf = CAST(char *, erealloc(ms->o.pbuf, psize))) == NULL) {
+	if ((pbuf = CAST(char *, erealloc(ms->o.pbuf, psize))) == NULL) {
 		file_oomem(ms, psize);
 		return NULL;
 	}
+	ms->o.pbuf = pbuf;
 
 #if defined(HAVE_WCHAR_H) && defined(HAVE_MBRTOWC) && defined(HAVE_WCWIDTH)
 	{
@@ -372,9 +609,9 @@ file_getbuffer(struct magic_set *ms)
 
 		while (op < eop) {
 			bytesconsumed = mbrtowc(&nextchar, op,
-			    (size_t)(eop - op), &state);
-			if (bytesconsumed == (size_t)(-1) ||
-			    bytesconsumed == (size_t)(-2)) {
+			    CAST(size_t, eop - op), &state);
+			if (bytesconsumed == CAST(size_t, -1) ||
+			    bytesconsumed == CAST(size_t, -2)) {
 				mb_conv = 0;
 				break;
 			}
@@ -397,7 +634,7 @@ file_getbuffer(struct magic_set *ms)
 #endif
 
 	for (np = ms->o.pbuf, op = ms->o.buf; *op;) {
-		if (isprint((unsigned char)*op)) {
+		if (isprint(CAST(unsigned char, *op))) {
 			*np++ = *op++;
 		} else {
 			OCTALIFY(np, op);
@@ -407,13 +644,13 @@ file_getbuffer(struct magic_set *ms)
 	return ms->o.pbuf;
 }
 
-protected int
+file_protected int
 file_check_mem(struct magic_set *ms, unsigned int level)
 {
 	size_t len;
 
 	if (level >= ms->c.len) {
-		len = (ms->c.len += 20) * sizeof(*ms->c.li);
+		len = (ms->c.len = 20 + level) * sizeof(*ms->c.li);
 		ms->c.li = CAST(struct level_info *, (ms->c.li == NULL) ?
 		    emalloc(len) :
 		    erealloc(ms->c.li, len));
@@ -430,47 +667,279 @@ file_check_mem(struct magic_set *ms, unsigned int level)
 	return 0;
 }
 
-protected size_t
+file_protected size_t
 file_printedlen(const struct magic_set *ms)
 {
-	return ms->o.buf == NULL ? 0 : strlen(ms->o.buf);
+	return ms->o.blen;
 }
 
+file_protected int
 file_replace(struct magic_set *ms, const char *pat, const char *rep)
 {
-	zval patt;
-	int opts = 0;
+	zend_string *pattern;
+	uint32_t opts = 0;
 	pcre_cache_entry *pce;
 	zend_string *res;
-	zval repl;
-	int  rep_cnt = 0;
+	zend_string *repl;
+	size_t rep_cnt = 0;
 
-	(void)setlocale(LC_CTYPE, "C");
-
-	opts |= PCRE_MULTILINE;
-	convert_libmagic_pattern(&patt, pat, strlen(pat), opts);
-	if ((pce = pcre_get_compiled_regex_cache(Z_STR(patt))) == NULL) {
-		zval_ptr_dtor(&patt);
+	opts |= PCRE2_MULTILINE;
+	pattern = convert_libmagic_pattern(pat, strlen(pat), opts);
+	pce = pcre_get_compiled_regex_cache_ex(pattern, 0);
+	zend_string_release_ex(pattern, 0);
+	if (pce == NULL) {
 		rep_cnt = -1;
 		goto out;
 	}
-	zval_ptr_dtor(&patt);
 
-	ZVAL_STRING(&repl, rep);
-	res = php_pcre_replace_impl(pce, ms->o.buf, strlen(ms->o.buf), &repl, 0, -1, &rep_cnt);
+	repl = zend_string_init(rep, strlen(rep), 0);
+	res = php_pcre_replace_impl(pce, NULL, ms->o.buf, strlen(ms->o.buf), repl, -1, &rep_cnt);
 
-	zval_ptr_dtor(&repl);
+	zend_string_release_ex(repl, 0);
 	if (NULL == res) {
 		rep_cnt = -1;
 		goto out;
 	}
 
-	strncpy(ms->o.buf, res->val, res->len);
-	ms->o.buf[res->len] = '\0';
+	memcpy(ms->o.buf, ZSTR_VAL(res), ZSTR_LEN(res));
+	ms->o.buf[ZSTR_LEN(res)] = '\0';
 
-	zend_string_release(res);
+	zend_string_release_ex(res, 0);
 
 out:
-	(void)setlocale(LC_CTYPE, "");
 	return rep_cnt;
+}
+
+file_protected file_pushbuf_t *
+file_push_buffer(struct magic_set *ms)
+{
+	file_pushbuf_t *pb;
+
+	if (ms->event_flags & EVENT_HAD_ERR)
+		return NULL;
+
+	if ((pb = (CAST(file_pushbuf_t *, emalloc(sizeof(*pb))))) == NULL)
+		return NULL;
+
+	pb->buf = ms->o.buf;
+	pb->blen = ms->o.blen;
+	pb->offset = ms->offset;
+
+	ms->o.buf = NULL;
+	ms->o.blen = 0;
+	ms->offset = 0;
+
+	return pb;
+}
+
+file_protected char *
+file_pop_buffer(struct magic_set *ms, file_pushbuf_t *pb)
+{
+	char *rbuf;
+
+	if (ms->event_flags & EVENT_HAD_ERR) {
+		efree(pb->buf);
+		efree(pb);
+		return NULL;
+	}
+
+	rbuf = ms->o.buf;
+
+	ms->o.buf = pb->buf;
+	ms->o.blen = pb->blen;
+	ms->offset = pb->offset;
+
+	efree(pb);
+	return rbuf;
+}
+
+/*
+ * convert string to ascii printable format.
+ */
+file_protected char *
+file_printable(struct magic_set *ms, char *buf, size_t bufsiz,
+    const char *str, size_t slen)
+{
+	char *ptr, *eptr = buf + bufsiz - 1;
+	const unsigned char *s = RCAST(const unsigned char *, str);
+	const unsigned char *es = s + slen;
+
+	for (ptr = buf;  ptr < eptr && s < es && *s; s++) {
+		if ((ms->flags & MAGIC_RAW) != 0 || isprint(*s)) {
+			*ptr++ = *s;
+			continue;
+		}
+		if (ptr >= eptr - 3)
+			break;
+		*ptr++ = '\\';
+		*ptr++ = ((CAST(unsigned int, *s) >> 6) & 7) + '0';
+		*ptr++ = ((CAST(unsigned int, *s) >> 3) & 7) + '0';
+		*ptr++ = ((CAST(unsigned int, *s) >> 0) & 7) + '0';
+	}
+	*ptr = '\0';
+	return buf;
+}
+
+struct guid {
+	uint32_t data1;
+	uint16_t data2;
+	uint16_t data3;
+	uint8_t data4[8];
+};
+
+static char XDIGIT[]  = "0123456789abcdef";
+static int
+atox(const uint8_t c)
+{
+	uint8_t d = isupper(c) ? tolower(c) : c;
+	const char *q = d ? strchr(XDIGIT, isupper(c) ? tolower(c) : c) : NULL;
+	if (q == NULL)
+		return -1;
+	return q - XDIGIT;
+}
+
+static int
+getxvalue(void *p, const char *s, size_t n)
+{
+	uint64_t v = 0;
+	for (size_t i = 0; i < n; i++) {
+		int x = atox(s[i]);
+		if (x == -1)
+			return 0;
+		v = (v << 4) | x;
+	}
+	switch (n) {
+	case 8:
+		*(uint32_t *)p = v;
+		return 1;
+	case 4:
+		*(uint16_t *)p = v;
+		return 1;
+	case 2:
+		*(uint8_t *)p = v;
+		return 1;
+	default:
+		return 0;
+	}
+}
+
+file_protected int
+file_parse_guid(const char *s, uint64_t *guid)
+{
+	struct guid *g = CAST(struct guid *, CAST(void *, guid));
+
+	if (!getxvalue(&g->data1, s, 8) || s[8] != '-')
+		return -1;
+	s += 9;
+	if (!getxvalue(&g->data2, s, 4) || s[4] != '-')
+		return -1;
+	s += 5;
+	if (!getxvalue(&g->data3, s, 4) || s[4] != '-')
+		return -1;
+	s += 5;
+	if (!getxvalue(&g->data4[0], s, 2) ||
+	    !getxvalue(&g->data4[1], s + 2, 2) || s[4] != '-')
+		return -1;
+	s += 5;
+	if (!getxvalue(&g->data4[2], s, 2) ||
+	    !getxvalue(&g->data4[3], s + 2, 2) ||
+	    !getxvalue(&g->data4[4], s + 4, 2) ||
+	    !getxvalue(&g->data4[5], s + 6, 2) ||
+	    !getxvalue(&g->data4[6], s + 8, 2) ||
+	    !getxvalue(&g->data4[7], s + 10, 2))
+		return -1;
+
+	if (file_bigendian()) {
+		g->data1 = file_swap4(g->data1);
+		g->data2 = file_swap2(g->data2);
+		g->data3 = file_swap2(g->data3);
+
+	}
+	return 0;
+}
+
+file_private int
+file_print_guid(char *str, size_t len, const struct guid *g)
+{
+#ifndef WIN32
+	return snprintf(str, len, "%.8X-%.4hX-%.4hX-%.2hhX%.2hhX-"
+	    "%.2hhX%.2hhX%.2hhX%.2hhX%.2hhX%.2hhX",
+	    g->data1, g->data2, g->data3, g->data4[0], g->data4[1],
+	    g->data4[2], g->data4[3], g->data4[4], g->data4[5],
+	    g->data4[6], g->data4[7]);
+#else
+	return snprintf(str, len, "%.8X-%.4hX-%.4hX-%.2hX%.2hX-"
+	    "%.2hX%.2hX%.2hX%.2hX%.2hX%.2hX",
+	    g->data1, g->data2, g->data3, g->data4[0], g->data4[1],
+	    g->data4[2], g->data4[3], g->data4[4], g->data4[5],
+	    g->data4[6], g->data4[7]);
+#endif
+}
+
+file_protected int
+file_print_leguid(char *str, size_t len, const uint64_t *guid)
+{
+	const struct guid *g = CAST(const struct guid *,
+	    CAST(const void *, guid));
+	return file_print_guid(str, len, g);
+}
+
+file_protected int
+file_print_beguid(char *str, size_t len, const uint64_t *guid)
+{
+	const struct guid *g = CAST(const struct guid *,
+	    CAST(const void *, guid));
+	struct guid gg = *g;
+	gg.data1 = file_swap4(gg.data1);
+	gg.data2 = file_swap2(gg.data2);
+	gg.data3 = file_swap2(gg.data3);
+	return file_print_guid(str, len, &gg);
+}
+
+#if 0
+file_protected int
+file_pipe_closexec(int *fds)
+{
+#ifdef __MINGW32__
+	return 0;
+#elif defined(HAVE_PIPE2)
+	return pipe2(fds, O_CLOEXEC);
+#else
+	if (pipe(fds) == -1)
+		return -1;
+# ifdef F_SETFD
+	(void)fcntl(fds[0], F_SETFD, FD_CLOEXEC);
+	(void)fcntl(fds[1], F_SETFD, FD_CLOEXEC);
+# endif
+	return 0;
+#endif
+}
+#endif
+
+file_protected int
+file_clear_closexec(int fd) {
+#ifdef F_SETFD
+	return fcntl(fd, F_SETFD, 0);
+#else
+	return 0;
+#endif
+}
+
+file_protected char *
+file_strtrim(char *str)
+{
+	char *last;
+
+	while (isspace(CAST(unsigned char, *str)))
+		str++;
+	last = str;
+	while (*last)
+		last++;
+	if (last == str)
+		return str;
+	--last;
+	while (isspace(CAST(unsigned char, *last)))
+		last--;
+	*++last = '\0';
+	return str;
 }

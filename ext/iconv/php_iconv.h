@@ -1,23 +1,17 @@
 /*
    +----------------------------------------------------------------------+
-   | PHP Version 7                                                        |
+   | Copyright © The PHP Group and Contributors.                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2015 The PHP Group                                |
-   +----------------------------------------------------------------------+
-   | This source file is subject to version 3.01 of the PHP license,      |
-   | that is bundled with this package in the file LICENSE, and is        |
-   | available through the world-wide-web at the following url:           |
-   | http://www.php.net/license/3_01.txt                                  |
-   | If you did not receive a copy of the PHP license and are unable to   |
-   | obtain it through the world-wide-web, please send a note to          |
-   | license@php.net so we can mail you a copy immediately.               |
+   | This source file is subject to the Modified BSD License that is      |
+   | bundled with this package in the file LICENSE, and is available      |
+   | through the World Wide Web at <https://www.php.net/license/>.        |
+   |                                                                      |
+   | SPDX-License-Identifier: BSD-3-Clause                                |
    +----------------------------------------------------------------------+
    | Authors: Rui Hirokawa <rui_hirokawa@ybb.ne.jp>                       |
    |          Stig Bakken <ssb@php.net>                                   |
    +----------------------------------------------------------------------+
  */
-
-/* $Id$ */
 
 #ifndef PHP_ICONV_H
 #define PHP_ICONV_H
@@ -34,17 +28,8 @@
 # define PHP_ICONV_API
 #endif
 
-#ifdef PHP_ATOM_INC
-#include "ext/iconv/php_have_iconv.h"
-#include "ext/iconv/php_have_libiconv.h"
-#include "ext/iconv/php_iconv_aliased_libiconv.h"
-#include "ext/iconv/php_have_glibc_iconv.h"
-#include "ext/iconv/php_have_bsd_iconv.h"
-#include "ext/iconv/php_have_ibm_iconv.h"
-#include "ext/iconv/php_iconv_supports_errno.h"
-#include "ext/iconv/php_php_iconv_impl.h"
-#include "ext/iconv/php_php_iconv_h_path.h"
-#endif
+#include "php_version.h"
+#define PHP_ICONV_VERSION PHP_VERSION
 
 #ifdef HAVE_ICONV
 extern zend_module_entry iconv_module_entry;
@@ -54,31 +39,16 @@ PHP_MINIT_FUNCTION(miconv);
 PHP_MSHUTDOWN_FUNCTION(miconv);
 PHP_MINFO_FUNCTION(miconv);
 
-PHP_NAMED_FUNCTION(php_if_iconv);
-PHP_FUNCTION(ob_iconv_handler);
-PHP_FUNCTION(iconv_get_encoding);
-PHP_FUNCTION(iconv_set_encoding);
-PHP_FUNCTION(iconv_strlen);
-PHP_FUNCTION(iconv_substr);
-PHP_FUNCTION(iconv_strpos);
-PHP_FUNCTION(iconv_strrpos);
-PHP_FUNCTION(iconv_mime_encode);
-PHP_FUNCTION(iconv_mime_decode);
-PHP_FUNCTION(iconv_mime_decode_headers);
-
 ZEND_BEGIN_MODULE_GLOBALS(iconv)
 	char *input_encoding;
 	char *internal_encoding;
 	char *output_encoding;
 ZEND_END_MODULE_GLOBALS(iconv)
 
-#ifdef ZTS
-# define ICONVG(v) ZEND_TSRMG(iconv_globals_id, zend_iconv_globals *, v)
-# ifdef COMPILE_DL_ICONV
-ZEND_TSRMLS_CACHE_EXTERN;
-# endif
-#else
-# define ICONVG(v) (iconv_globals.v)
+#define ICONVG(v) ZEND_MODULE_GLOBALS_ACCESSOR(iconv, v)
+
+#if defined(ZTS) && defined(COMPILE_DL_ICONV)
+ZEND_TSRMLS_CACHE_EXTERN()
 #endif
 
 #ifdef HAVE_IBM_ICONV
@@ -95,7 +65,7 @@ ZEND_TSRMLS_CACHE_EXTERN;
 
 /* {{{ typedef enum php_iconv_err_t */
 typedef enum _php_iconv_err_t {
-	PHP_ICONV_ERR_SUCCESS           = SUCCESS,
+	PHP_ICONV_ERR_SUCCESS           = 0,
 	PHP_ICONV_ERR_CONVERTER         = 1,
 	PHP_ICONV_ERR_WRONG_CHARSET     = 2,
 	PHP_ICONV_ERR_TOO_BIG           = 3,
@@ -103,7 +73,8 @@ typedef enum _php_iconv_err_t {
 	PHP_ICONV_ERR_ILLEGAL_CHAR      = 5,
 	PHP_ICONV_ERR_UNKNOWN           = 6,
 	PHP_ICONV_ERR_MALFORMED         = 7,
-	PHP_ICONV_ERR_ALLOC             = 8
+	PHP_ICONV_ERR_ALLOC             = 8,
+	PHP_ICONV_ERR_OUT_BY_BOUNDS     = 9
 } php_iconv_err_t;
 /* }}} */
 
@@ -118,10 +89,3 @@ PHP_ICONV_API php_iconv_err_t php_iconv_string(const char * in_p, size_t in_len,
 #define phpext_iconv_ptr iconv_module_ptr
 
 #endif	/* PHP_ICONV_H */
-
-/*
- * Local variables:
- * tab-width: 4
- * c-basic-offset: 4
- * End:
- */

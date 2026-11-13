@@ -17,4 +17,9 @@ foreach (testGenerator() as $i);
 
 ?>
 --EXPECTF--
-Fatal error: Call to undefined function foo() in %s on line %d
+Fatal error: Uncaught Error: Call to undefined function foo() in %s:%d
+Stack trace:
+#0 %s(%d): autoload('SyntaxError')
+#1 %s(%d): testGenerator()
+#2 {main}
+  thrown in %s on line %d

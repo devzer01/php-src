@@ -1,22 +1,16 @@
 /*
    +----------------------------------------------------------------------+
-   | PHP Version 7                                                        |
+   | Copyright © The PHP Group and Contributors.                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2015 The PHP Group                                |
-   +----------------------------------------------------------------------+
-   | This source file is subject to version 3.01 of the PHP license,      |
-   | that is bundled with this package in the file LICENSE, and is        |
-   | available through the world-wide-web at the following url:           |
-   | http://www.php.net/license/3_01.txt                                  |
-   | If you did not receive a copy of the PHP license and are unable to   |
-   | obtain it through the world-wide-web, please send a note to          |
-   | license@php.net so we can mail you a copy immediately.               |
+   | This source file is subject to the Modified BSD License that is      |
+   | bundled with this package in the file LICENSE, and is available      |
+   | through the World Wide Web at <https://www.php.net/license/>.        |
+   |                                                                      |
+   | SPDX-License-Identifier: BSD-3-Clause                                |
    +----------------------------------------------------------------------+
    | Author: Andrea Faulds     <ajf@ajf.me>                               |
    +----------------------------------------------------------------------+
 */
-
-/* $Id: $ */
 
 #ifndef HTTP_STATUS_CODES_H
 #define HTTP_STATUS_CODES_H
@@ -26,7 +20,7 @@ typedef struct _http_response_status_code_pair {
 	const char *str;
 } http_response_status_code_pair;
 
-static http_response_status_code_pair http_status_map[] = {
+static const http_response_status_code_pair http_status_map[] = {
 	{ 100, "Continue" },
 	{ 101, "Switching Protocols" },
 	{ 200, "OK" },
@@ -66,12 +60,14 @@ static http_response_status_code_pair http_status_map[] = {
 	{ 428, "Precondition Required" },
 	{ 429, "Too Many Requests" },
 	{ 431, "Request Header Fields Too Large" },
+	{ 451, "Unavailable For Legal Reasons"},
 	{ 500, "Internal Server Error" },
 	{ 501, "Not Implemented" },
 	{ 502, "Bad Gateway" },
 	{ 503, "Service Unavailable" },
 	{ 504, "Gateway Timeout" },
 	{ 505, "HTTP Version Not Supported" },
+	{ 506, "Variant Also Negotiates" },
 	{ 511, "Network Authentication Required" },
 	/* to allow search with while() loop */
 	{ 0, NULL }

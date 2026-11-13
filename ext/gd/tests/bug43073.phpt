@@ -1,29 +1,57 @@
 --TEST--
-Bug #43073 (TrueType bounding box is wrong for angle<>0) freetype < 2.4.10
+Bug #43073 (TrueType bounding box is wrong for angle<>0)
+--EXTENSIONS--
+gd
 --SKIPIF--
 <?php
-	if(!extension_loaded('gd')){ die('skip gd extension not available'); }
-	if(!function_exists('imagettftext')) die('skip imagettftext() not available');
-
-	include dirname(__FILE__) . '/func.inc';
-	if(version_compare(get_freetype_version(), '2.4.10') >= 0) die('skip for freetype < 2.4.10');
+    if(!function_exists('imagettftext')) die('skip imagettftext() not available');
+    if (!(imagetypes() & IMG_PNG)) {
+        die("skip No PNG support");
+    }
 ?>
 --FILE--
 <?php
-$cwd = dirname(__FILE__);
+$exp = [
+    [501,400, 611,400, 611,376, 501,376],
+    [492,361, 597,319, 588,296, 483,338],
+    [470,329, 549,249, 533,233, 453,312],
+    [439,307, 481,202, 460,193, 416,297],
+    [400,299, 400,187, 376,187, 376,299],
+    [361,305, 319,201, 296,210, 338,314],
+    [329,327, 249,248, 233,265, 311,344],
+    [307,360, 202,316, 193,338, 297,383],
+    [299,400, 187,400, 187,424, 299,424],
+    [305,438, 201,480, 210,503, 314,461],
+    [327,470, 248,548, 265,566, 344,488],
+    [360,492, 316,595, 338,604, 383,502],
+    [400,501, 400,611, 424,611, 424,501],
+    [438,492, 480,597, 503,588, 461,483],
+    [470,470, 548,549, 566,532, 488,453],
+    [492,439, 595,481, 604,460, 502,416]
+];
+$cwd = __DIR__;
 $font = "$cwd/Tuffy.ttf";
 $delta_t = 360.0 / 16; # Make 16 steps around
 $g = imagecreate(800, 800);
 $bgnd  = imagecolorallocate($g, 255, 255, 255);
 $black = imagecolorallocate($g, 0, 0, 0);
+$red = imagecolorallocate($g, 255, 0, 0);
 $x = 100;
 $y = 0;
 $cos_t = cos(deg2rad($delta_t));
 $sin_t = sin(deg2rad($delta_t));
-for ($angle = 0.0; $angle < 360.0; $angle += $delta_t) {
-  $bbox = imagettftext($g, 24, $angle, 400+$x, 400+$y, $black, $font, 'ABCDEF');
-  $s = vsprintf("(%d, %d), (%d, %d), (%d, %d), (%d, %d)\n", $bbox);
-  echo $s;
+for ($angle = 0.0, $i = 0; $angle < 360.0; $angle += $delta_t, $i++) {
+  $bbox = imagettftext($g, 24, (int)$angle, (int)(400+$x), (int)(400+$y), $black, $font, 'ABCDEF');
+  imagepolygon($g, $bbox, $red);
+  printf("%2d: ", $i);
+  for ($j = 0; $j < 8; $j++) {
+    if ($bbox[$j] >= $exp[$i][$j] - 1 && $bbox[$j] <= $exp[$i][$j] + 1) {
+        echo '.';
+    } else {
+        echo "(expected {$exp[$i][$j]}, got {$bbox[$j]})";
+    }
+  }
+  echo "\n";
   $temp = $cos_t * $x + $sin_t * $y;
   $y    = $cos_t * $y - $sin_t * $x;
   $x    = $temp;
@@ -31,21 +59,21 @@ for ($angle = 0.0; $angle < 360.0; $angle += $delta_t) {
 imagepng($g, "$cwd/bug43073.png");
 ?>
 --CLEAN--
-<?php @unlink(dirname(__FILE__) . '/bug43073.png'); ?>
---EXPECTF--
-(500, 40%d), (610, 40%d), (610, 376), (500, 376)
-(492, 363), (591, 322), (580, 295), (480, 336)
-(470, 331), (548, 254), (527, 233), (449, 310)
-(439, 309), (483, 202), (461, 193), (416, 299)
-(40%d, 300), (40%d, 183), (38%d, 183), (38%d, 300)
-(362, 307), (316, 195), (291, 205), (337, 318)
-(330, 329), (246, 244), (224, 265), (308, 350)
-(308, 360), (202, 316), (190, 344), (296, 388)
-(300, %d), (18%d, %d), (18%d, 425), (%d, 425)
-(306, 437), (195, 483), (206, 510), (318, 464)
-(328, 469), (240, 557), (260, 578), (349, 491)
-(359, 491), (312, 607), (334, 616), (382, 501)
-(%d, 500), (%d, 618), (41%d, 618), (41%d, 500)
-(436, 493), (483, 607), (507, 597), (461, 482)
-(468, 471), (555, 558), (577, 538), (490, 450)
-(490, 440), (600, 485), (611, 457), (502, 412)
+<?php @unlink(__DIR__ . '/bug43073.png'); ?>
+--EXPECT--
+ 0: ........
+ 1: ........
+ 2: ........
+ 3: ........
+ 4: ........
+ 5: ........
+ 6: ........
+ 7: ........
+ 8: ........
+ 9: ........
+10: ........
+11: ........
+12: ........
+13: ........
+14: ........
+15: ........

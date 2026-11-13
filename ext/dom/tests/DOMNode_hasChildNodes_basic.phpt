@@ -1,15 +1,13 @@
 --TEST--
 Test whether a node has child nodes: hasChildNodes()
---SKIPIF--
-<?php
-include('skipif.inc');
-?>
+--EXTENSIONS--
+dom
 --FILE--
-<?php 
+<?php
 
 /* Create an XML document
- * with strcuture
- * <book> 
+ * with structure
+ * <book>
  *  <title>This is the title</title>
  * </book>
  * Check for child nodes of the <book>, <title> and This is the title
@@ -37,7 +35,7 @@ echo "Text has child nodes: ";
 var_dump($text->hasChildNodes());
 
 ?>
---EXPECTF--
+--EXPECT--
 Root has child nodes: bool(true)
 Title has child nodes: bool(true)
 Text has child nodes: bool(false)

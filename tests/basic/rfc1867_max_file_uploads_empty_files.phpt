@@ -1,10 +1,7 @@
 --TEST--
-rfc1867 max_file_uploads - empty files shouldn't count (non-debug version)
---SKIPIF--
-<?php if(function_exists("leak")) print "skip only for non-debug builds"; ?>
+rfc1867 max_file_uploads - empty files shouldn't count
 --INI--
 file_uploads=1
-error_reporting=E_ALL
 max_file_uploads=2
 --POST_RAW--
 Content-Type: multipart/form-data; boundary=---------------------------20896060251896012921717172737
@@ -34,17 +31,19 @@ Content-Type: text/plain-file
 var_dump($_FILES);
 var_dump($_POST);
 if (is_uploaded_file($_FILES["file1"]["tmp_name"])) {
-	var_dump(file_get_contents($_FILES["file1"]["tmp_name"]));
+    var_dump(file_get_contents($_FILES["file1"]["tmp_name"]));
 }
 if (is_uploaded_file($_FILES["file4"]["tmp_name"])) {
-	var_dump(file_get_contents($_FILES["file4"]["tmp_name"]));
+    var_dump(file_get_contents($_FILES["file4"]["tmp_name"]));
 }
 ?>
 --EXPECTF--
 array(4) {
   ["file2"]=>
-  array(5) {
+  array(6) {
     ["name"]=>
+    string(0) ""
+    ["full_path"]=>
     string(0) ""
     ["type"]=>
     string(0) ""
@@ -56,8 +55,10 @@ array(4) {
     int(0)
   }
   ["file3"]=>
-  array(5) {
+  array(6) {
     ["name"]=>
+    string(0) ""
+    ["full_path"]=>
     string(0) ""
     ["type"]=>
     string(0) ""
@@ -69,8 +70,10 @@ array(4) {
     int(0)
   }
   ["file4"]=>
-  array(5) {
+  array(6) {
     ["name"]=>
+    string(9) "file4.txt"
+    ["full_path"]=>
     string(9) "file4.txt"
     ["type"]=>
     string(15) "text/plain-file"
@@ -82,8 +85,10 @@ array(4) {
     int(0)
   }
   ["file1"]=>
-  array(5) {
+  array(6) {
     ["name"]=>
+    string(9) "file1.txt"
+    ["full_path"]=>
     string(9) "file1.txt"
     ["type"]=>
     string(15) "text/plain-file"

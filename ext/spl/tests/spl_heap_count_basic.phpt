@@ -8,12 +8,12 @@ Chris Scott chris.scott@nstein.com
 
 class MyHeap extends SplHeap
 {
-    public function compare($a,$b)
+    public function compare($a,$b): int
     {
         return ($a < $b);
     }
 
-    public function count() // override count to force failure
+    public function count(): int // override count to force failure
     {
         throw new Exception('Cause count to fail');
         return parent::count();
@@ -23,13 +23,12 @@ class MyHeap extends SplHeap
 
 $heap = new MyHeap();
 $heap->insert(1);
-count($heap);// refers to MyHeap->count() method
+try {
+    count($heap);// refers to MyHeap->count() method
+} catch (Exception $e) {
+    echo $e::class, ': ', $e->getMessage(), "\n";
+}
 
 ?>
---EXPECTF--
-Fatal error: Uncaught exception 'Exception' with message 'Cause count to fail' in %s
-Stack trace:
-#0 [internal function]: MyHeap->count()
-#1 %s count(Object(MyHeap))
-#2 {main}
-  thrown in %s on line %d
+--EXPECT--
+Exception: Cause count to fail

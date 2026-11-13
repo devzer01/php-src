@@ -1,147 +1,221 @@
-﻿PHP                                                                        NEWS
+PHP                                                                        NEWS
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-?? ??? 20??, PHP 7.0.0
-
-- CLI server:
-  . Refactor MIME type handling to use a hash table instead of linear search.
-    (Adam)
-  . Update the MIME type list from the one shipped by Apache HTTPD. (Adam)
+?? ??? ????, PHP 8.7.0alpha1
 
 - Core:
-  . Fixed #68933 (Invalid read of size 8 in zend_std_read_property). 
-    (Laruence, arjen at react dot com)
-  . Fixed #68868 (Segfault in clean_non_persistent_constants() in SugarCRM 
-    6.5.20). (Laruence)
-  . Fixed bug #68104 (Segfault while pre-evaluating a disabled function).
-    (Laruence)
-  . Fixed bug #68252 (segfault in Zend/zend_hash.c in function
-    _zend_hash_del_el). (Laruence)
-  . Added PHP_INT_MIN constant. (Andrea)
-  . Added Closure::call() method. (Andrea)
-  . Implemented FR #38409 (parse_ini_file() looses the type of booleans). (Tjerk)
-  . Fixed #67959 (Segfault when calling phpversion('spl')). (Florian)
-  . Implemented the RFC `Catchable "Call to a member function bar() on a
-    non-object"`. (Timm)
-  . Added options parameter for unserialize allowing to specify acceptable
-    classes (https://wiki.php.net/rfc/secure_unserialize). (Stas)
-  . Fixed bug #68185 ("Inconsistent insteadof definition."- incorrectly triggered). (Julien)
-  . Fixed bug #65419 (Inside trait, self::class != __CLASS__). (Julien)
-  . Fixed bug #65576 (Constructor from trait conflicts with inherited
-    constructor). (dunglas at gmail dot com)
-  . Removed ZEND_ACC_FINAL_CLASS, promoting ZEND_ACC_FINAL as final class 
-    modifier. (Guilherme Blanco)
-  . is_long() & is_integer() is now an alias of is_int(). (Kalle)
-  . Implemented FR #55467 (phpinfo: PHP Variables with $ and single quotes). (Kalle)
-  . Fixed bug #55415 (php_info produces invalid anchor names). (Kalle, Johannes)
-  . Added ?? operator. (Andrea)
-  . Added \u{xxxxx} Unicode Codepoint Escape Syntax. (Andrea)
-  . Fixed oversight where define() did not support arrays yet const syntax did. (Andrea, Dmitry)
-  . Use "integer" and "float" instead of "long" and "double" in ZPP, type hint and conversion error messages. (Andrea)
-  . Implemented FR #55428 (E_RECOVERABLE_ERROR when output buffering in output buffering handler). (Kalle)
-  . Removed scoped calls of non-static methods from an incompatible $this
-    context. (Nikita)
-  . Removed support for #-style comments in ini files. (Nikita)
-  . Removed support for assigning the result of new by reference. (Nikita)
-  . Invalid octal literals in source code now produce compile errors, fixes PHPSadness #31. (Andrea)
-  . Removed dl() function on fpm-fcgi. (Nikita)
-  . Removed support for hexadecimal numeric strings. (Nikita)
+  . A flat unkeyed list assignment from an array literal with one value per
+    target, such as [$a, $b] = [$b, $a], no longer builds the array when the
+    result is unused (GH-23048). (Artem Ukrainskiy)
 
 - Curl:
-  . Fixed bug #68937 (Segfault in curl_multi_exec). (Laruence)
-
-- Date:
-  . Fixed day_of_week function as it could sometimes return negative values
-    internally. (Derick)
-  . Removed $is_dst parameter from mktime() and gmmktime(). (Nikita)
-
-- DBA:
-  . Fixed bug #62490 (dba_delete returns true on missing item (inifile)). (Mike)
-  . Fixed bug #68711 (useless comparisons). (bugreports at internot dot info)
-
-- DOM:
-  . Made DOMNode::textContent writeable. (Tjerk)
-
-- GD:
-  . Made fontFetch's path parser thread-safe. (Sara)
-
-- Fileinfo:
-  . Fixed bug #66242 (libmagic: don't assume char is signed). (ArdB)
-
-- Filter:
-  . New FILTER_VALIDATE_DOMAIN and better RFC conformance for FILTER_VALIDATE_URL. (Kevin Dunglas)
+  . Fixed curl_reset() retaining CURLOPT_PRIVATE after reset. (lacatoire)
+  . curl_multi_exec() now throws a TypeError when $still_running cannot be
+    converted to an int.
+    (arshidkv12)
+  . Uploading multiple files with the same field name is now possible by
+    passing an array of CURLFile or CURLStringFile objects to
+    CURLOPT_POSTFIELDS. (Sjoerd Langkemper)
 
 - FPM:
-  . Fixed bug #68945 (Unknown admin values segfault pools) (Laruence)
-  . Fixed bug #65933 (Cannot specify config lines longer than 1024 bytes). (Chris Wright)
-  . Implement request #67106 (Split main fpm config). (Elan Ruusamäe, Remi)
+  . Use recommended TYPE, HELP order for OpenMetrics metadata.
+    (Marcel Hernandez)
 
-- LiteSpeed:
-  . Updated LiteSpeed SAPI code from V5.5 to V6.6. (George Wang)
+- GD:
+  . Fixed imagecolormatch() and imagejpeg() ValueError messages. (lacatoire)
 
-- Mcrypt:
-  . Fixed possible read after end of buffer and use after free. (Dmitry)
+- Hash:
+  . Fixed mhash_keygen_s2k() truncating a $length above INT_MAX instead of
+    throwing a ValueError. (Marc Bennewitz)
+
+- Intl:
+  . Added Spoofchecker::getRestrictionLevel(). (Weilin Du)
+  . Added Collator::getRules() and collator_get_rules(). (Weilin Du)
+  . Added IntlRelativeDateTimeFormatter for locale-aware relative date and time
+    formatting, with enums for styles, capitalization contexts, and units.
+    (Weilin Du)
+  . Added Transliterator::toRules() and transliterator_to_rules().
+    (Weilin Du, David Carlier)
+  . Fixed Collator attribute and strength methods not rejecting an
+    unconstructed Collator. (Ilia Alshanetsky)
+  . Added optional $availableLocales argument to Locale::acceptFromHttp()
+    (GH-24074). (David Carlier)
+  . Fixed a double-free when Calendar::createInstance() or
+    IntlCalendar::fromDateTime() fails after adopting a TimeZone.
+    (Ilia Alshanetsky)
+  . Added IntlNumberFormatter::createFromSkeleton() (GH-24165). (David Carlier)
+
+- Lexbor:
+  . Merge patches lexbor/lexbor@8a14bc0 and lexbor/lexbor@f67ce4b, fixing a
+    heap buffer overflow in :lexbor-contains() parsing and buffer overflows
+    in malformed decode replay. (alexandre-daubois)
+  . Merge patches lexbor/lexbor@859f100, lexbor/lexbor@a36e09a,
+    lexbor/lexbor@b0f7412, lexbor/lexbor@1b215a8, lexbor/lexbor@385afff,
+    lexbor/lexbor@e6c068f, lexbor/lexbor@327a8b6, lexbor/lexbor@917742f and
+    lexbor/lexbor@e89c258, fixing dropped usernames containing an at sign,
+    uninitialized memory in IDNA buffer growth, the encoding of a space
+    before a query or fragment in an opaque path, a query or fragment lost
+    after a dot segment in a path, replacement file drive paths, the output
+    encoding used for percent-encoding, the URLSearchParams tail pointer and
+    fragment serialization without a query. (alexandre-daubois)
+
+- LibXML:
+  . Clear the libxml last error in libxml_use_internal_errors(false).
+    (lacatoire)
+
+- MBString:
+  . Fixed bug GH-23106 (mb_strpos() reads past the end of a haystack ending in
+    a truncated UTF-8 sequence). (Lazizbek Ergashev)
+  . Updated Unicode data tables to Unicode 18.0 (Yuya Hamada)
+  . Fixed mbstring functions emitting surrogates in UTF-8 output and flagging
+    it as valid UTF-8. (Nicolas Grekas)
+  . Fixed bug GH-23958 (truncated encoding names resolving to full names). (Kamil Tekiela)
+  . Fixed stack overflow in mb_check_encoding() and mb_convert_encoding() with
+    deeply nested arrays. (Eyüp Can Akman)
+
+- MySQLi:
+  . Fix GH-22854: Fixed failed assertion when accessing mysqli property after
+    failed reconnection. (Kamil Tekiela)
+  . Fixed memory leak when closing a prepared statement after its connection
+    was killed. (Kamil Tekiela)
+
+- MySQLnd:
+  . Fixed field_count not resetting on OK packet. (Kamil Tekiela)
+  . Fixed bug GH-24609 (OK packets without an info message rejected on x32
+    builds). (lazerg)
 
 - Opcache:
-  . Fixed bug with try blocks being removed when extended_info opcode
-    generation is turned on. (Laruence)
-  . Fixed bug #68644 (strlen incorrect : mbstring + func_overload=2 +UTF-8
-    + Opcache). (Laruence)
+  . Fixed range inference of assignments through typed references.
+    (Ilia Alshanetsky)
+  . Fixed bug GH-23693 (Tracing JIT produces wrong results for a guard on a
+    loop-invariant addition). (Ilia Alshanetsky)
+  . Fixed OSS-Fuzz #545352966 (default value AST of an SHM-persisted partial).
+    (ndossche)
+  . Fixed JIT ignoring exceptions from typed property set hooks. (David Carlier)
 
-- OpenSSL:
-  . Fix bug #61285, #68329, #68046, #41631: encrypted streams don't observe
-    socket timeouts (Brad Broerman)
+- PDO:
+  . Fixed PDOStatement::getColumnMeta() reading out of bounds for an invalid
+    column index. (Ilia Alshanetsky)
+  . Fixed PDOStatement::bindColumn() registering a binding for a column name
+    that is not in the result set. (Ilia Alshanetsky)
+  . Fixed bug GH-23962 (Destroying a persistent PDO instance rolls back a
+    transaction still in use by another instance). (Lazizbek Ergashev)
+  . Fixed PDOStatement::execute() leaving a partial set of bindings in place
+    when binding its array argument fails. (Ilia Alshanetsky, Kamil Tekiela)
 
-- pcntl:
-  . Fixed bug #60509 (pcntl_signal doesn't decrease ref-count of old handler
-    when setting SIG_DFL). (Julien)
+- PDO_PGSQL:
+  . Improved performance of the SQL parser that handles placeholders.
+    (brainexe)
+  . Improved performance of fetching integer columns. (brainexe)
+  . Fixed bug GH-24490 (pdo_pgsql prepare() hangs on a query containing a NUL
+    byte). (dev-null-undefined)
 
-- PCRE:
-  . Removed support for the /e (PREG_REPLACE_EVAL) modifier. (Nikita)
+- PDO_SQLite:
+  . Fixed bug GH-24990 (Statement unusable after a failed execute()). (lazerg)
 
-- PDO_mysql:
-  . Fixed bug #68424 (Add new PDO mysql connection attr to control multi
-    statements option). (peter dot wolanin at acquia dot com)
+- PGSQL:
+  . Fixed pg_lo_write() rejecting data containing null bytes. (Ilia Alshanetsky)
 
-- Reflection
-  . Fixed inheritance chain of Reflector interface. (Tjerk)
+- phpdbg:
+  . Fixed bug GH-13230 (use-after-free at phpdbg shutdown).
+    (Kamil Tekiela, Ilia Alshanetsky)
+
+- Posix:
+  . Reverted the validity check on the flags argument of posix_access().
+    (David Carlier)
+
+- Phar:
+  . Fixed bug GH-25093 (Phar::webPhar() redirect reads past the request URI).
+    (lazerg)
+  . Fixed bug GH-22556 (OOM DoS via oversized ././@LongLink entry in TAR phar).
+    (crystarm)
+
+- Readline:
+  . Fixed a heap over-read in the interactive shell prompt when cli.prompt is
+    set to an empty string. (Ilia Alshanetsky)
 
 - Session:
-  . Fixed bug #67694 (Regression in session_regenerate_id()). (Tjerk)
-  . Fixed bug #68941 (mod_files.sh is a bash-script) (bugzilla at ii.nl, Yasuo)
+  . Fixed session_start() continuing after a failed create_sid() when
+    session.use_strict_mode rejects the supplied ID. (Ilia Alshanetsky)
+  . Fixed exceptions from user-defined create_sid() handlers being replaced
+    by return-value validation errors. (Ilia Alshanetsky)
+  . Fixed calling SessionHandler::open() twice without an intervening
+    close() when re-initializing an active session. (Ilia Alshanetsky)
+
+- SimpleXML:
+  . Fixed bug GH-12171 (SimpleXML property-proxy equality ignores element
+    names). (Ilia Alshanetsky)
 
 - SOAP:
-  . Fixed bug #68361 (Segmentation fault on SoapClient::__getTypes).
-    (Laruence)
+  . Fixed the SOAP client accepting a response body shorter than its
+    Content-Length and reusing the connection. (Ilia Alshanetsky)
+  . Fixed bug GH-24315 (Harden SoapClient cross-origin redirect handling).
+    (Ilia Alshanetsky)
 
 - SPL:
-  . Implemented #67886 (SplPriorityQueue/SplHeap doesn't expose extractFlags
-    nor curruption state). (Julien)
-  . Fixed bug #66405 (RecursiveDirectoryIterator::CURRENT_AS_PATHNAME
-    breaks the RecursiveIterator). (Paul Garvin)
-  . Fixed bug #68479 (Added escape parameter to SplFileObject::fputcsv). (Salathe)
+  . Fixed bug GH-23385 (SplDoublyLinkedList::serialize() use-after-free when
+    __serialize() removes an element). (David Carlier)
 
-- Sqlite3:
-  . Fix bug #68260 (SQLite3Result::fetchArray declares wrong 
-    required_num_args). (Julien)
-
-- Standard:
-  . Removed call_user_method() and call_user_method_array() functions. (Kalle)
-  . Fix user session handlers (See rfc:session.user.return-value). (Sara)
-  . Added intdiv() function. (Andrea)
-  . Improved precision of log() function for base 2 and 10. (Marc Bennewitz)
-  . Remove string category support in setlocale(). (Nikita)
-  . Remove set_magic_quotes_runtime() and its alias magic_quotes_runtime().
-    (Nikita)
-  . Fixed bug #65272 (flock() out parameter not set correctly in windows).
-    (Daniel Lowrey)
+- SQLite:
+  . Fixed a crash when SQLite3::close() is called from a userland callback.
+    (Ilia Alshanetsky)
+  . Fixed bug GH-22051 (Inconsistent error reporting in SQLite3Result::reset()
+    and SQLite3Result::finalize()). (Ilia Alshanetsky)
 
 - Streams:
-  . Fixed bug #68532 (convert.base64-encode omits padding bytes).
-    (blaesius at krumedia dot de)
-  . Removed set_socket_blocking() in favor of its alias stream_set_blocking().
-    (Nikita)
+  . Applied the so_linger, so_rcvbuf and so_sndbuf context options to unix
+    sockets. (David Carlier)
+  . Fixed a use-after-free when a user stream wrapper unregisters itself from
+    its constructor, destructor or __set() during unlink(), rename(), mkdir(),
+    rmdir(), touch(), chmod() or stat(). (Ilia Alshanetsky)
 
-- XSL:
-  . Fixed bug #64776 (The XSLT extension is not thread safe). (Mike)
+- Standard:
+  . Fixed bug GH-25387 (Uploaded files leak in request_parse_body()).
+    (Kévin Dunglas)
+  . Fixed quoted_printable_decode() truncating input at NUL bytes. (Weilin Du)
+  . Fixed version_compare() silently truncating version strings at NUL bytes by
+    rejecting such input. (Weilin Du)
+  . Fixed bug #60110 (fclose(), file_put_contents(), copy() do not return false
+    properly). (Jakub Zelenka, Ilija Tovilo)
+  . Fixed three Windows-only proc_open() defects: an uninitialized
+    PROCESS_INFORMATION, an indeterminate comspec pointer after a failed
+    lookup, and an unchecked CreateFileA() failure. (Ilia Alshanetsky)
+  . Fix persistent stream context lifetime during shutdown (Levi Morrison)
+  . Fixed bug GH-23780 (unserialize('') fails silently). (timwolla)
+  . Fixed stream_select() aborting the whole call once any watched stream's
+    descriptor exceeded FD_SETSIZE; it no longer imposes that limit, so watching
+    many descriptors no longer requires rebuilding with --enable-fd-setsize.
+    (Frode Børli)
+  . Fixed stream_select() on Windows capping the number of watched sockets at
+    FD_SETSIZE; the winsock fd_set now grows on demand. (Frode Børli)
+  . Fixed stream_select() on Windows overflowing a fixed 64-entry stack array
+    (crashing with a stack buffer overrun) when passed more than 64 pipe or file
+    handles; it now fails gracefully instead. (Frode Børli)
+  . Improved performance of array_splice() when inserting without removing
+    elements. (mehmetcansahin)
+  . Enforce max_filter_count: limit the number of filters that can be chained
+    in a php://filter URL. (Sjoerd Langkemper)
+  . Improved performance of array_chunk() when not preserving keys.
+    (mehmetcansahin)
+  . Improved performance of resolving the charset of HTML functions,
+    especially UTF-8. (Nicolas Grekas)
+  . Improved performance of htmlspecialchars() when nothing needs encoding.
+    (Nicolas Grekas)
+  . bindec(), octdec(), hexdec() and base_convert() now throw an Exception
+    when the passed string contains characters that are invalid for the
+    specified number base. (Sjoerd Langkemper)
+  . Improved performance of in_array() and array_search() in strict mode when
+    searching for a string. (Alexander Danilov)
+
+- URI:
+  . Fix casing of enum cases in UriHostType and UrlHostType to match the RFC
+    and PHP’s naming policy. (timwolla)
+
+- XML:
+  . Fixed xml_get_current_byte_index() returning negative values for byte
+    indexes beyond 2 GiB on Windows x64. (Marc Bennewitz)
+
+- Zlib:
+  . Fixed inflate_init() dropping the preset dictionary for raw streams with
+    a non-default window. (Ilia Alshanetsky)
 
 <<< NOTE: Insert NEWS from last stable release here prior to actual release! >>>

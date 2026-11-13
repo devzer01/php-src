@@ -9,6 +9,11 @@ var_dump(metaphone("scratc"));
 
 ?>
 --EXPECTF--
-%string|unicode%(4) "SKRX"
-%string|unicode%(4) "SKR0"
-%string|unicode%(5) "SKRTK"
+Deprecated: Function metaphone() is deprecated since 8.6, use a userland phonetic matching library instead in %s on line %d
+string(4) "SKRX"
+
+Deprecated: Function metaphone() is deprecated since 8.6, use a userland phonetic matching library instead in %s on line %d
+string(4) "SKR0"
+
+Deprecated: Function metaphone() is deprecated since 8.6, use a userland phonetic matching library instead in %s on line %d
+string(5) "SKRTK"

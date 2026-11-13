@@ -7,9 +7,14 @@ function gen() {
     yield;
 }
 
-$gen = gen();
-clone $gen;
+
+try {
+    $gen = gen();
+    clone $gen;
+} catch (Throwable $e) {
+    echo $e::class, ": ", $e->getMessage(), PHP_EOL;
+}
 
 ?>
---EXPECTF--
-Fatal error: Trying to clone an uncloneable object of class Generator in %s on line %d
+--EXPECT--
+Error: Trying to clone an uncloneable object of class Generator

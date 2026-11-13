@@ -1,14 +1,12 @@
 /*
    +----------------------------------------------------------------------+
-   | PHP Version 7                                                        |
+   | Copyright © The PHP Group and Contributors.                          |
    +----------------------------------------------------------------------+
-   | This source file is subject to version 3.01 of the PHP license,      |
-   | that is bundled with this package in the file LICENSE, and is        |
-   | available through the world-wide-web at the following url:           |
-   | http://www.php.net/license/3_01.txt                                  |
-   | If you did not receive a copy of the PHP license and are unable to   |
-   | obtain it through the world-wide-web, please send a note to          |
-   | license@php.net so we can mail you a copy immediately.               |
+   | This source file is subject to the Modified BSD License that is      |
+   | bundled with this package in the file LICENSE, and is available      |
+   | through the World Wide Web at <https://www.php.net/license/>.        |
+   |                                                                      |
+   | SPDX-License-Identifier: BSD-3-Clause                                |
    +----------------------------------------------------------------------+
    | Authors: Vadim Savchuk <vsavchuk@productengine.com>                  |
    |          Dmitry Lakhtyuk <dlakhtyuk@productengine.com>               |
@@ -45,69 +43,92 @@ typedef struct _intl_data {
 	obj = Z_##oclass##_P( object );												\
     intl_error_reset( INTL_DATA_ERROR_P(obj) );						\
 
-/* Check status by error code, if error - exit */
+/* Check status by error code, if error return false */
 #define INTL_CHECK_STATUS(err, msg)											\
     intl_error_set_code( NULL, (err) );							\
     if( U_FAILURE((err)) )													\
     {																		\
-        intl_error_set_custom_msg( NULL, msg, 0 );				\
+        intl_error_set_custom_msg( NULL, msg);				\
         RETURN_FALSE;														\
     }
 
-/* Check status in object, if error - exit */
+/* Check status by error code, if error return null */
+#define INTL_CHECK_STATUS_OR_NULL(err, msg)                     \
+    intl_error_set_code( NULL, (err) );             \
+    if( U_FAILURE((err)) )                          \
+    {                                   \
+        intl_error_set_custom_msg( NULL, msg);        \
+        RETURN_NULL();                           \
+    }
+
+
+/* Check status in object, if error return false */
 #define INTL_METHOD_CHECK_STATUS(obj, msg)											\
     intl_error_set_code( NULL, INTL_DATA_ERROR_CODE((obj)) );				\
     if( U_FAILURE( INTL_DATA_ERROR_CODE((obj)) ) )									\
     {																				\
-        intl_errors_set_custom_msg( INTL_DATA_ERROR_P((obj)), msg, 0 );	\
+        intl_errors_set_custom_msg( INTL_DATA_ERROR_P((obj)), msg);	\
         RETURN_FALSE;										\
     }
 
-/* Check status, if error - destroy value and exit */
-#define INTL_CTOR_CHECK_STATUS(obj, msg)											\
-    intl_error_set_code( NULL, INTL_DATA_ERROR_CODE((obj)) );				\
+/* Check status in object, if error goto a label */
+#define INTL_METHOD_CHECK_STATUS_OR_GOTO(obj, msg, label)							\
+    intl_error_set_code( NULL, INTL_DATA_ERROR_CODE((obj)) );						\
     if( U_FAILURE( INTL_DATA_ERROR_CODE((obj)) ) )									\
     {																				\
-        intl_errors_set_custom_msg( INTL_DATA_ERROR_P((obj)), msg, 0 );	\
-		/* yes, this is ugly, but it alreay is */									\
-		if (return_value != getThis()) {											\
-			zval_dtor(return_value);												\
-			RETURN_NULL();															\
-		}																			\
-		Z_OBJ_P(return_value) = NULL;												\
-		return;																		\
+        intl_errors_set_custom_msg( INTL_DATA_ERROR_P((obj)), msg);				\
+        RETVAL_FALSE;																\
+        goto label;																	\
+    }
+
+/* Check status in object, if error return null */
+#define INTL_METHOD_CHECK_STATUS_OR_NULL(obj, msg)									\
+    intl_error_set_code( NULL, INTL_DATA_ERROR_CODE((obj)) );						\
+    if( U_FAILURE( INTL_DATA_ERROR_CODE((obj)) ) )									\
+    {																				\
+        intl_errors_set_custom_msg( INTL_DATA_ERROR_P((obj)), msg);				\
+        zval_ptr_dtor(return_value);												\
+        RETURN_NULL();																\
+    }
+
+/* Check status in object, if error return FAILURE */
+#define INTL_CTOR_CHECK_STATUS(obj, msg)											\
+    intl_error_set_code( NULL, INTL_DATA_ERROR_CODE((obj)) );						\
+    if( U_FAILURE( INTL_DATA_ERROR_CODE((obj)) ) )									\
+    {																				\
+        intl_errors_set_custom_msg( INTL_DATA_ERROR_P((obj)), msg);				\
+        return FAILURE;																\
     }
 
 #define INTL_METHOD_RETVAL_UTF8(obj, ustring, ulen, free_it)									\
 {																								\
-	char *u8value;																				\
-	size_t u8len;																				\
-	intl_convert_utf16_to_utf8(&u8value, &u8len, ustring, ulen, &INTL_DATA_ERROR_CODE((obj)));	\
+	zend_string *u8str;																			\
+	u8str = intl_convert_utf16_to_utf8(ustring, ulen, &INTL_DATA_ERROR_CODE((obj)));			\
 	if((free_it)) {																				\
 		efree(ustring);																			\
 	}																							\
 	INTL_METHOD_CHECK_STATUS((obj), "Error converting value to UTF-8");							\
-	RETVAL_STRINGL(u8value, u8len);																\
-	efree(u8value);																				\
+	RETVAL_NEW_STR(u8str);																		\
 }
 
-#define INTL_MAX_LOCALE_LEN 80
+#define INTL_MAX_LOCALE_LEN (ULOC_FULLNAME_CAPACITY-1)
 
 #define INTL_CHECK_LOCALE_LEN(locale_len)												\
-	if((locale_len) > INTL_MAX_LOCALE_LEN) {											\
-		intl_error_set( NULL, U_ILLEGAL_ARGUMENT_ERROR,									\
-		"Locale string too long, should be no longer than 80 characters", 0 );			\
+	if (UNEXPECTED((locale_len) > INTL_MAX_LOCALE_LEN)) {								\
+		char *_msg; \
+		spprintf(&_msg, 0, "Locale string too long, should be no longer than %d characters", INTL_MAX_LOCALE_LEN);			\
+		intl_error_set( NULL, U_ILLEGAL_ARGUMENT_ERROR,	_msg); \
+		efree(_msg); \
 		RETURN_NULL();																	\
 	}
 
-#define INTL_CHECK_LOCALE_LEN_OBJ(locale_len, object)									\
-	if((locale_len) > INTL_MAX_LOCALE_LEN) {											\
-		intl_error_set( NULL, U_ILLEGAL_ARGUMENT_ERROR,									\
-		"Locale string too long, should be no longer than 80 characters", 0 );			\
-		zval_dtor(object);																\
-		ZVAL_NULL(object);																\
-		RETURN_NULL();																	\
+#define INTL_CHECK_LOCALE_LEN_OR_FAILURE(locale_len)									\
+	if (UNEXPECTED((locale_len) > INTL_MAX_LOCALE_LEN)) {								\
+		char *_msg; \
+		spprintf(&_msg, 0, "Locale string too long, should be no longer than %d characters", INTL_MAX_LOCALE_LEN);			\
+		intl_error_set( NULL, U_ILLEGAL_ARGUMENT_ERROR,	_msg); 								\
+		efree(_msg); \
+		return FAILURE;																	\
 	}
-
 
 #endif // INTL_DATA_H

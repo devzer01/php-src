@@ -7,15 +7,15 @@ class Foo implements IteratorAggregate
     public function bar() {
         throw new Exception;
     }
-					        
-    public function getIterator() {
+
+    public function getIterator(): Traversable {
         return new ArrayIterator($this->bar());
     }
 }
 var_dump(iterator_to_array(new Foo));
 ?>
 --EXPECTF--
-Fatal error: Uncaught exception 'Exception' in %s
+Fatal error: Uncaught Exception in %s
 Stack trace:
 #0 %s: Foo->bar()
 #1 [internal function]: Foo->getIterator()

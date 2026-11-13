@@ -2,22 +2,19 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2015 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright © Zend Technologies Ltd., a subsidiary company of          |
+   |     Perforce Software, Inc., and Contributors.                       |
    +----------------------------------------------------------------------+
-   | This source file is subject to version 2.00 of the Zend license,     |
-   | that is bundled with this package in the file LICENSE, and is        |
-   | available through the world-wide-web at the following url:           |
-   | http://www.zend.com/license/2_00.txt.                                |
-   | If you did not receive a copy of the Zend license and are unable to  |
-   | obtain it through the world-wide-web, please send a note to          |
-   | license@zend.com so we can mail you a copy immediately.              |
+   | This source file is subject to the Modified BSD License that is      |
+   | bundled with this package in the file LICENSE, and is available      |
+   | through the World Wide Web at <https://www.php.net/license/>.        |
+   |                                                                      |
+   | SPDX-License-Identifier: BSD-3-Clause                                |
    +----------------------------------------------------------------------+
-   | Authors: Andi Gutmans <andi@zend.com>                                |
-   |          Zeev Suraski <zeev@zend.com>                                |
+   | Authors: Andi Gutmans <andi@php.net>                                 |
+   |          Zeev Suraski <zeev@php.net>                                 |
    +----------------------------------------------------------------------+
 */
-
-/* $Id$ */
 
 #include "zend.h"
 #include <zend_language_parser.h>
@@ -25,13 +22,11 @@
 #include "zend_highlight.h"
 #include "zend_ptr_stack.h"
 #include "zend_globals.h"
+#include "zend_exceptions.h"
 
 ZEND_API void zend_html_putc(char c)
 {
 	switch (c) {
-		case '\n':
-			ZEND_PUTS("<br />");
-			break;
 		case '<':
 			ZEND_PUTS("&lt;");
 			break;
@@ -41,11 +36,8 @@ ZEND_API void zend_html_putc(char c)
 		case '&':
 			ZEND_PUTS("&amp;");
 			break;
-		case ' ':
-			ZEND_PUTS("&nbsp;");
-			break;
 		case '\t':
-			ZEND_PUTS("&nbsp;&nbsp;&nbsp;&nbsp;");
+			ZEND_PUTS("    ");
 			break;
 		default:
 			ZEND_PUTC(c);
@@ -86,14 +78,12 @@ ZEND_API void zend_highlight(zend_syntax_highlighter_ini *syntax_highlighter_ini
 {
 	zval token;
 	int token_type;
-	char *last_color = syntax_highlighter_ini->highlight_html;
-	char *next_color;
+	const char *last_color = syntax_highlighter_ini->highlight_html;
+	const char *next_color;
 
-	zend_printf("<code>");
-	zend_printf("<span style=\"color: %s\">\n", last_color);
+	zend_printf("<pre><code style=\"color: %s\">", last_color);
 	/* highlight stuff coming back from zendlex() */
-	ZVAL_UNDEF(&token);
-	while ((token_type=lex_scan(&token))) {
+	while ((token_type=lex_scan(&token, NULL))) {
 		switch (token_type) {
 			case T_INLINE_HTML:
 				next_color = syntax_highlighter_ini->highlight_html;
@@ -111,6 +101,7 @@ ZEND_API void zend_highlight(zend_syntax_highlighter_ini *syntax_highlighter_ini
 			case T_TRAIT_C:
 			case T_METHOD_C:
 			case T_FUNC_C:
+			case T_PROPERTY_C:
 			case T_NS_C:
 			case T_CLASS_C:
 				next_color = syntax_highlighter_ini->highlight_default;
@@ -156,7 +147,7 @@ ZEND_API void zend_highlight(zend_syntax_highlighter_ini *syntax_highlighter_ini
 				case T_DOC_COMMENT:
 					break;
 				default:
-					zend_string_release(Z_STR(token));
+					zval_ptr_dtor_str(&token);
 					break;
 			}
 		}
@@ -164,10 +155,12 @@ ZEND_API void zend_highlight(zend_syntax_highlighter_ini *syntax_highlighter_ini
 	}
 
 	if (last_color != syntax_highlighter_ini->highlight_html) {
-		zend_printf("</span>\n");
+		zend_printf("</span>");
 	}
-	zend_printf("</span>\n");
-	zend_printf("</code>");
+	zend_printf("</code></pre>");
+
+	/* Discard parse errors thrown during tokenization */
+	zend_clear_exception();
 }
 
 ZEND_API void zend_strip(void)
@@ -176,15 +169,14 @@ ZEND_API void zend_strip(void)
 	int token_type;
 	int prev_space = 0;
 
-	ZVAL_UNDEF(&token);
-	while ((token_type=lex_scan(&token))) {
+	while ((token_type=lex_scan(&token, NULL))) {
 		switch (token_type) {
 			case T_WHITESPACE:
 				if (!prev_space) {
 					zend_write(" ", sizeof(" ") - 1);
 					prev_space = 1;
 				}
-						/* lack of break; is intentional */
+				ZEND_FALLTHROUGH;
 			case T_COMMENT:
 			case T_DOC_COMMENT:
 				ZVAL_UNDEF(&token);
@@ -193,7 +185,7 @@ ZEND_API void zend_strip(void)
 			case T_END_HEREDOC:
 				zend_write((char*)LANG_SCNG(yy_text), LANG_SCNG(yy_leng));
 				/* read the following character, either newline or ; */
-				if (lex_scan(&token) != T_WHITESPACE) {
+				if (lex_scan(&token, NULL) != T_WHITESPACE) {
 					zend_write((char*)LANG_SCNG(yy_text), LANG_SCNG(yy_leng));
 				}
 				zend_write("\n", sizeof("\n") - 1);
@@ -217,20 +209,14 @@ ZEND_API void zend_strip(void)
 					break;
 
 				default:
-					zend_string_release(Z_STR(token));
+					zval_ptr_dtor_str(&token);
 					break;
 			}
 		}
 		prev_space = 0;
 		ZVAL_UNDEF(&token);
 	}
+
+	/* Discard parse errors thrown during tokenization */
+	zend_clear_exception();
 }
-
-/*
- * Local variables:
- * tab-width: 4
- * c-basic-offset: 4
- * indent-tabs-mode: t
- * End:
- */
-

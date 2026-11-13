@@ -2,8 +2,6 @@
 rfc1867 array upload
 --INI--
 file_uploads=1
-error_reporting=E_ALL&~E_NOTICE
-comment=debug builds show some additional E_NOTICE errors
 upload_max_filesize=1024
 max_file_uploads=10
 --POST_RAW--
@@ -31,36 +29,45 @@ var_dump($_POST);
 ?>
 --EXPECTF--
 array(1) {
-  [%u|b%"file"]=>
-  array(5) {
-    [%u|b%"name"]=>
+  ["file"]=>
+  array(6) {
+    ["name"]=>
     array(3) {
       [0]=>
-      %unicode|string%(9) "file1.txt"
+      string(9) "file1.txt"
       [2]=>
-      %unicode|string%(9) "file2.txt"
+      string(9) "file2.txt"
       [3]=>
-      %unicode|string%(9) "file3.txt"
+      string(9) "file3.txt"
     }
-    [%u|b%"type"]=>
+    ["full_path"]=>
     array(3) {
       [0]=>
-      %unicode|string%(16) "text/plain-file1"
+      string(9) "file1.txt"
       [2]=>
-      %unicode|string%(16) "text/plain-file2"
+      string(9) "file2.txt"
       [3]=>
-      %unicode|string%(16) "text/plain-file3"
+      string(9) "file3.txt"
     }
-    [%u|b%"tmp_name"]=>
+    ["type"]=>
     array(3) {
       [0]=>
-      %unicode|string%(%d) "%s"
+      string(16) "text/plain-file1"
       [2]=>
-      %unicode|string%(%d) "%s"
+      string(16) "text/plain-file2"
       [3]=>
-      %unicode|string%(%d) "%s"
+      string(16) "text/plain-file3"
     }
-    [%u|b%"error"]=>
+    ["tmp_name"]=>
+    array(3) {
+      [0]=>
+      string(%d) "%s"
+      [2]=>
+      string(%d) "%s"
+      [3]=>
+      string(%d) "%s"
+    }
+    ["error"]=>
     array(3) {
       [0]=>
       int(0)
@@ -69,7 +76,7 @@ array(1) {
       [3]=>
       int(0)
     }
-    [%u|b%"size"]=>
+    ["size"]=>
     array(3) {
       [0]=>
       int(1)

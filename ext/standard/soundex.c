@@ -1,38 +1,30 @@
 /*
    +----------------------------------------------------------------------+
-   | PHP Version 7                                                        |
+   | Copyright © The PHP Group and Contributors.                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2015 The PHP Group                                |
+   | This source file is subject to the Modified BSD License that is      |
+   | bundled with this package in the file LICENSE, and is available      |
+   | through the World Wide Web at <https://www.php.net/license/>.        |
+   |                                                                      |
+   | SPDX-License-Identifier: BSD-3-Clause                                |
    +----------------------------------------------------------------------+
-   | This source file is subject to version 3.01 of the PHP license,      |
-   | that is bundled with this package in the file LICENSE, and is        |
-   | available through the world-wide-web at the following url:           |
-   | http://www.php.net/license/3_01.txt                                  |
-   | If you did not receive a copy of the PHP license and are unable to   |
-   | obtain it through the world-wide-web, please send a note to          |
-   | license@php.net so we can mail you a copy immediately.               |
-   +----------------------------------------------------------------------+
-   | Author: Bj�rn Borud - Guardian Networks AS <borud@guardian.no>       |
+   | Author: Bjørn Borud - Guardian Networks AS <borud@guardian.no>       |
    +----------------------------------------------------------------------+
  */
-/* $Id$ */
 
 #include "php.h"
 #include <stdlib.h>
-#include <errno.h>
 #include <ctype.h>
-#include "php_string.h"
 
 /* Simple soundex algorithm as described by Knuth in TAOCP, vol 3 */
-/* {{{ proto string soundex(string str)
-   Calculate the soundex key of a string */
+/* {{{ Calculate the soundex key of a string */
 PHP_FUNCTION(soundex)
 {
 	char	*str;
 	size_t	i, _small, str_len, code, last;
 	char	soundex[4 + 1];
 
-	static char soundex_table[26] =
+	static const char soundex_table[26] =
 	{0,							/* A */
 	 '1',						/* B */
 	 '2',						/* C */
@@ -60,12 +52,9 @@ PHP_FUNCTION(soundex)
 	 0,							/* Y */
 	 '2'};						/* Z */
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "s", &str, &str_len) == FAILURE) {
-		return;
-	}
-	if (str_len == 0) {
-		RETURN_FALSE;
-	}
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_STRING(str, str_len)
+	ZEND_PARSE_PARAMETERS_END();
 
 	/* build soundex string */
 	last = -1;
@@ -74,7 +63,7 @@ PHP_FUNCTION(soundex)
 		/* BUG: should also map here accented letters used in non */
 		/* English words or names (also found in English text!): */
 		/* esstsett, thorn, n-tilde, c-cedilla, s-caron, ... */
-		code = toupper((int)(unsigned char)str[i]);
+		code = toupper((unsigned char)str[i]);
 		if (code >= 'A' && code <= 'Z') {
 			if (_small == 0) {
 				/* remember first valid char */
@@ -104,12 +93,3 @@ PHP_FUNCTION(soundex)
 	RETURN_STRINGL(soundex, _small);
 }
 /* }}} */
-
-/*
- * Local variables:
- * tab-width: 4
- * c-basic-offset: 4
- * End:
- * vim600: sw=4 ts=4 fdm=marker
- * vim<600: sw=4 ts=4
- */

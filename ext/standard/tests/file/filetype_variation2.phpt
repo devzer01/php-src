@@ -7,23 +7,21 @@ Dave Kelsey <d_kelsey@uk.ibm.com>
 if (substr(PHP_OS, 0, 3) == 'WIN') {
     die('skip no /dev on Windows');
 }
-if (!file_exists("/dev/console")) {
-    die('skip /dev/console not available');
-}    
+if (!file_exists("/dev/null")) {
+    die('skip /dev/null not available');
+}
 ?>
 --FILE--
 <?php
-/*
-Prototype: string filetype ( string $filename );
-Description: Returns the type of the file. Possible values are fifo, char,
-             dir, block, link, file, and unknown. 
-*/
-
+$devnull = "/dev/null";
+// On Solaris, /dev/null is symlink
+if (is_link($devnull)) {
+    $devnull = readlink($devnull);
+    if ($devnull[0] != '/') $devnull = dirname("/dev/null") . '/' . $devnull;
+}
 echo "-- Checking for char --\n";
-print( filetype("/dev/console") )."\n";
+print(filetype($devnull)) . "\n";
 ?>
-===DONE===
---EXPECTF--
+--EXPECT--
 -- Checking for char --
 char
-===DONE===

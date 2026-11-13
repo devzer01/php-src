@@ -1,11 +1,11 @@
 --TEST--
 SQLite3::querySingle tests
---SKIPIF--
-<?php require_once(dirname(__FILE__) . '/skipif.inc'); ?>
+--EXTENSIONS--
+sqlite3
 --FILE--
 <?php
 
-require_once(dirname(__FILE__) . '/new_db.inc');
+require_once(__DIR__ . '/new_db.inc');
 define('TIMENOW', time());
 
 echo "Creating Table\n";

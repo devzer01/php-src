@@ -28,18 +28,12 @@ struct itimerval {
 	struct timeval it_value;	/* current value */
 };
 
-#if !defined(timespec) && _MSC_VER < 1900
-struct timespec
-{
-	time_t   tv_sec;   /* seconds */
-	long     tv_nsec;  /* nanoseconds */
-};
-#endif
-
 #define ITIMER_REAL    0		/*generates sigalrm */
 #define ITIMER_VIRTUAL 1		/*generates sigvtalrm */
 #define ITIMER_VIRT    1		/*generates sigvtalrm */
 #define ITIMER_PROF    2		/*generates sigprof */
+
+typedef long suseconds_t;
 
 /* Prototype stuff ********************************************************** */
 PHPAPI extern int gettimeofday(struct timeval *time_Info, struct timezone *timezone_Info);

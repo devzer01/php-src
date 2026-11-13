@@ -1,24 +1,18 @@
 /*
   +----------------------------------------------------------------------+
-  | PHP Version 7                                                        |
+  | Copyright © The PHP Group and Contributors.                          |
   +----------------------------------------------------------------------+
-  | Copyright (c) 2006-2015 The PHP Group                                |
+  | This source file is subject to the Modified BSD License that is      |
+  | bundled with this package in the file LICENSE, and is available      |
+  | through the World Wide Web at <https://www.php.net/license/>.        |
+  |                                                                      |
+  | SPDX-License-Identifier: BSD-3-Clause                                |
   +----------------------------------------------------------------------+
-  | This source file is subject to version 3.01 of the PHP license,      |
-  | that is bundled with this package in the file LICENSE, and is        |
-  | available through the world-wide-web at the following url:           |
-  | http://www.php.net/license/3_01.txt                                  |
-  | If you did not receive a copy of the PHP license and are unable to   |
-  | obtain it through the world-wide-web, please send a note to          |
-  | license@php.net so we can mail you a copy immediately.               |
+  | Authors: Andrey Hristov <andrey@php.net>                             |
+  |          Ulf Wendel <uw@php.net>                                     |
+  |          Georg Richter <georg@php.net>                               |
   +----------------------------------------------------------------------+
-  | Authors: Georg Richter <georg@mysql.com>                             |
-  |          Andrey Hristov <andrey@mysql.com>                           |
-  |          Ulf Wendel <uwendel@mysql.com>                              |
-  +----------------------------------------------------------------------+
-
 */
-
 #ifndef MYSQLND_LIBMYSQL_COMPAT_H
 #define MYSQLND_LIBMYSQL_COMPAT_H
 
@@ -30,18 +24,18 @@
 #define MYSQL_RES				MYSQLND_RES
 #define MYSQL_ROW				MYSQLND_ROW_C
 #define MYSQL					MYSQLND
-#define my_bool					zend_bool
+#define my_bool					bool
 #define my_ulonglong			uint64_t
 
 #define MYSQL_VERSION_ID		MYSQLND_VERSION_ID
-#define MYSQL_SERVER_VERSION	MYSQLND_VERSION
+#define MYSQL_SERVER_VERSION	PHP_MYSQLND_VERSION
 #define MYSQL_ERRMSG_SIZE		MYSQLND_ERRMSG_SIZE
 #define SQLSTATE_LENGTH			MYSQLND_SQLSTATE_LENGTH
 
 /* functions */
 #define mysql_affected_rows(r)			mysqlnd_affected_rows((r))
 #define mysql_autocommit(r,m)			mysqlnd_autocommit((r),(m))
-#define mysql_change_user(r,a,b,c)		mysqlnd_change_user((r), (a), (b), (c), FALSE)
+#define mysql_change_user(r,a,b,c)		mysqlnd_change_user((r), (a), (b), (c), false)
 #define mysql_character_set_name(c)		mysqlnd_character_set_name((c))
 #define mysql_close(r)					mysqlnd_close((r), MYSQLND_CLOSE_EXPLICIT)
 #define mysql_commit(r)					mysqlnd_commit((r), TRANS_COR_NO_OPT, NULL)
@@ -59,11 +53,10 @@
 #define mysql_field_count(r)			mysqlnd_field_count((r))
 #define mysql_field_seek(r,o)			mysqlnd_field_seek((r), (o))
 #define mysql_field_tell(r)				mysqlnd_field_tell((r))
-#define mysql_init(a)					mysqlnd_init((a))
+#define mysql_init(a)					mysqlnd_connection_init((a), false)
 #define mysql_insert_id(r)				mysqlnd_insert_id((r))
 #define mysql_kill(r,n)					mysqlnd_kill((r), (n))
 #define mysql_list_dbs(c, wild)			mysqlnd_list_dbs((c), (wild))
-#define mysql_list_fields(c, tab, wild)	mysqlnd_list_fields((c), (tab), (wild))
 #define mysql_list_processes(c)			mysqlnd_list_processes((c))
 #define mysql_list_tables(c, wild)		mysqlnd_list_tables((c), (wild))
 #define mysql_more_results(r)			mysqlnd_more_results((r))
@@ -85,7 +78,7 @@
 #define mysql_stmt_param_count(s)		mysqlnd_stmt_param_count((s))
 #define mysql_stmt_num_rows(s)			mysqlnd_stmt_num_rows((s))
 #define mysql_stmt_insert_id(s)			mysqlnd_stmt_insert_id((s))
-#define mysql_stmt_close(s)				mysqlnd_stmt_close((s))
+#define mysql_stmt_close(s)				mysqlnd_stmt_close((s), 0)
 #define mysql_stmt_bind_param(s,b)		mysqlnd_stmt_bind_param((s), (b))
 #define mysql_stmt_bind_result(s,b)		mysqlnd_stmt_bind_result((s), (b))
 #define mysql_stmt_errno(s)				mysqlnd_stmt_errno((s))
@@ -100,7 +93,6 @@
 #define mysql_stmt_send_long_data(s,p,d,l) mysqlnd_stmt_send_long_data((s), (p), (d), (l))
 #define mysql_stmt_attr_get(s,a,v)		mysqlnd_stmt_attr_get((s), (a), (v))
 #define mysql_stmt_attr_set(s,a,v)		mysqlnd_stmt_attr_set((s), (a), (v))
-#define mysql_stmt_param_metadata(s)	mysqlnd_stmt_param_metadata((s))
 #define mysql_stmt_result_metadata(s)	mysqlnd_stmt_result_metadata((s))
 #define mysql_stmt_next_result(s)		mysqlnd_stmt_next_result((s))
 #define mysql_stmt_more_results(s)		mysqlnd_stmt_more_results((s))
@@ -109,7 +101,7 @@
 #define mysql_options(c,a,v)			mysqlnd_options((c), (a), (v))
 #define mysql_options4(c,a,k,v)			mysqlnd_options4((c), (a), (k), (v))
 #define mysql_stmt_init(r)				mysqlnd_stmt_init((r))
-#define mysql_free_result(r)			mysqlnd_free_result((r), FALSE)
+#define mysql_free_result(r)			mysqlnd_free_result((r), false)
 #define mysql_store_result(r)			mysqlnd_store_result((r))
 #define mysql_use_result(r)				mysqlnd_use_result((r))
 #define mysql_async_store_result(r)		mysqlnd_async_store_result((r))
@@ -130,6 +122,7 @@
 #define REFRESH_STATUS		MYSQLND_REFRESH_STATUS
 #define REFRESH_THREADS		MYSQLND_REFRESH_THREADS
 #define REFRESH_SLAVE		MYSQLND_REFRESH_SLAVE
+#define REFRESH_REPLICA		MYSQLND_REFRESH_REPLICA
 #define REFRESH_MASTER		MYSQLND_REFRESH_MASTER
 #define REFRESH_BACKUP_LOG	MYSQLND_REFRESH_BACKUP_LOG
 

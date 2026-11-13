@@ -2,11 +2,6 @@
 Test array_unique() function : usage variations - different arrays for 'input' argument
 --FILE--
 <?php
-/* Prototype  : array array_unique(array $input)
- * Description: Removes duplicate values from array 
- * Source code: ext/standard/array.c
-*/
-
 /*
 * Passing different arrays to $input argument and testing whether
 * array_unique() behaves in an expected way.
@@ -31,7 +26,7 @@ EOT;
 
 // heredoc with different whitespaces
 $diff_whitespaces = <<<EOT
-hello\r world\t
+hello\n world\t
 1111\t\t != 2222\v\v
 heredoc\ndouble quoted string. with\vdifferent\fwhite\vspaces
 EOT;
@@ -51,8 +46,8 @@ $inputs = array (
        array(false, true, false), // with default keys and boolean values
        array(), // empty array
 /*5*/  array(NULL, null), // with NULL
-       array("a\v\f", "aaaa\r", "b", "aaaa\r", "\[\]\!\@\#\$\%\^\&\*\(\)\{\}"),  // with double quoted strings
-       array('a\v\f', 'aaaa\r', 'b', 'aaaa\r', '\[\]\!\@\#\$\%\^\&\*\(\)\{\}'),  // with single quoted strings
+       array("a\v\f", "aaaa\n", "b", "aaaa\n", "\[\]\!\@\#\$\%\^\&\*\(\)\{\}"),  // with double quoted strings
+       array('a\v\f', 'aaaa\n', 'b', 'aaaa\n', '\[\]\!\@\#\$\%\^\&\*\(\)\{\}'),  // with single quoted strings
        array("h1" => $blank_line, "h2" => $multiline_string, "h3" => $diff_whitespaces, $blank_line),  // with heredocs
 
        // associative arrays
@@ -63,11 +58,11 @@ $inputs = array (
        array("one" => 1, 2 => "two", 4 => "four"),  //mixed
 
        // associative array, containing null/empty/boolean values as key/value
-/*14*/ array(NULL => "NULL", null => "null", "NULL" => NULL, "null" => null),
+/*14*/
        array(true => "true", false => "false", "false" => false, "true" => true),
        array("" => "emptyd", '' => 'emptys', "emptyd" => "", 'emptys' => ''),
-       array(1 => '', 2 => "", 3 => NULL, 4 => null, 5 => false, 6 => true),
-/*18*/ array('' => 1, "" => 2, NULL => 3, null => 4, false => 5, true => 6),
+       array(1 => '', 2 => "", 5 => false, 6 => true),
+/*18*/ array('' => 1, "" => 2, false => 5, true => 6),
 );
 
 // loop through each sub-array of $inputs to check the behavior of array_unique()
@@ -77,10 +72,10 @@ foreach($inputs as $input) {
   var_dump( array_unique($input, SORT_STRING) );
   $iterator++;
 }
-  
+
 echo "Done";
 ?>
---EXPECTF--
+--EXPECT--
 *** Testing array_unique() : Passing different arrays to $input argument ***
 -- Iteration 1 --
 array(2) {
@@ -114,37 +109,39 @@ array(1) {
 -- Iteration 6 --
 array(4) {
   [0]=>
-  %unicode|string%(3) "a"
+  string(3) "a"
   [1]=>
-  %unicode|string%(5) "aaaa"
+  string(5) "aaaa
+"
   [2]=>
-  %unicode|string%(1) "b"
+  string(1) "b"
   [4]=>
-  %unicode|string%(27) "\[\]\!\@\#$\%\^\&\*\(\)\{\}"
+  string(27) "\[\]\!\@\#$\%\^\&\*\(\)\{\}"
 }
 -- Iteration 7 --
 array(4) {
   [0]=>
-  %unicode|string%(5) "a\v\f"
+  string(5) "a\v\f"
   [1]=>
-  %unicode|string%(6) "aaaa\r"
+  string(6) "aaaa\n"
   [2]=>
-  %unicode|string%(1) "b"
+  string(1) "b"
   [4]=>
-  %unicode|string%(28) "\[\]\!\@\#\$\%\^\&\*\(\)\{\}"
+  string(28) "\[\]\!\@\#\$\%\^\&\*\(\)\{\}"
 }
 -- Iteration 8 --
 array(3) {
-  [%b|u%"h1"]=>
-  %unicode|string%(1) "
+  ["h1"]=>
+  string(1) "
 "
-  [%b|u%"h2"]=>
-  %unicode|string%(88) "hello world
+  ["h2"]=>
+  string(88) "hello world
 The quick brown fox jumped over;
 the lazy dog
 This is a double quoted string"
-  [%b|u%"h3"]=>
-  %unicode|string%(88) "hello world	
+  ["h3"]=>
+  string(88) "hello
+ world	
 1111		 != 2222
 heredoc
 double quoted string. withdifferentwhitespaces"
@@ -152,15 +149,15 @@ double quoted string. withdifferentwhitespaces"
 -- Iteration 9 --
 array(2) {
   [1]=>
-  %unicode|string%(3) "one"
+  string(3) "one"
   [2]=>
-  %unicode|string%(3) "two"
+  string(3) "two"
 }
 -- Iteration 10 --
 array(2) {
-  [%b|u%"one"]=>
+  ["one"]=>
   int(1)
-  [%b|u%"two"]=>
+  ["two"]=>
   int(2)
 }
 -- Iteration 11 --
@@ -174,56 +171,49 @@ array(3) {
 }
 -- Iteration 12 --
 array(2) {
-  [%b|u%"one"]=>
-  %unicode|string%(3) "ten"
-  [%b|u%"two"]=>
-  %unicode|string%(6) "twenty"
+  ["one"]=>
+  string(3) "ten"
+  ["two"]=>
+  string(6) "twenty"
 }
 -- Iteration 13 --
 array(3) {
-  [%b|u%"one"]=>
+  ["one"]=>
   int(1)
   [2]=>
-  %unicode|string%(3) "two"
+  string(3) "two"
   [4]=>
-  %unicode|string%(4) "four"
+  string(4) "four"
 }
 -- Iteration 14 --
-array(2) {
-  [%b|u%""]=>
-  %unicode|string%(4) "null"
-  [%b|u%"NULL"]=>
-  NULL
-}
--- Iteration 15 --
 array(4) {
   [1]=>
-  %unicode|string%(4) "true"
+  string(4) "true"
   [0]=>
-  %unicode|string%(5) "false"
-  [%b|u%"false"]=>
+  string(5) "false"
+  ["false"]=>
   bool(false)
-  [%b|u%"true"]=>
+  ["true"]=>
   bool(true)
+}
+-- Iteration 15 --
+array(2) {
+  [""]=>
+  string(6) "emptys"
+  ["emptyd"]=>
+  string(0) ""
 }
 -- Iteration 16 --
 array(2) {
-  [%b|u%""]=>
-  %unicode|string%(6) "emptys"
-  [%b|u%"emptyd"]=>
-  %unicode|string%(0) ""
-}
--- Iteration 17 --
-array(2) {
   [1]=>
-  %unicode|string%(0) ""
+  string(0) ""
   [6]=>
   bool(true)
 }
--- Iteration 18 --
+-- Iteration 17 --
 array(3) {
-  [%b|u%""]=>
-  int(4)
+  [""]=>
+  int(2)
   [0]=>
   int(5)
   [1]=>

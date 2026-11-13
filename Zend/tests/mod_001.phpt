@@ -6,12 +6,15 @@ modulus by zero
 $a = array(1,2,3);
 $b = array();
 
-$c = $a % $b;
-var_dump($c);
+try {
+    $c = $a % $b;
+    var_dump($c);
+} catch (Throwable $e) {
+    echo $e::class, ': ', $e->getMessage(), "\n";
+}
 
 echo "Done\n";
 ?>
---EXPECTF--	
-Warning: Division by zero in %s on line %d
-bool(false)
+--EXPECTF--
+TypeError: Unsupported operand types: array % array
 Done

@@ -1,15 +1,17 @@
 --TEST--
 PostgreSQL pg_update()
+--EXTENSIONS--
+pgsql
 --SKIPIF--
 <?php
-include("skipif.inc");
+include("inc/skipif.inc");
 skip_bytea_not_escape();
 ?>
 --FILE--
 <?php
 error_reporting(E_ALL);
 
-include 'config.inc';
+include 'inc/config.inc';
 
 $db = pg_connect($conn_str);
 $fields = array('num'=>'1234', 'str'=>'ABC', 'bin'=>'XYZ');
@@ -23,4 +25,5 @@ echo "Ok\n";
 ?>
 --EXPECT--
 UPDATE "php_pgsql_test" SET "num"=1234,"str"=E'ABC',"bin"=E'XYZ' WHERE "num"=1234;
+UPDATE "php_pgsql_test" SET "num='1234',"str='ABC',"bin='XYZ' WHERE "num='1234';
 Ok

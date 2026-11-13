@@ -1,7 +1,7 @@
 --TEST--
 Accessing children nodes
---SKIPIF--
-<?php if (!extension_loaded("tidy")) print "skip"; ?>
+--EXTENSIONS--
+tidy
 --FILE--
 <?php
 
@@ -25,12 +25,12 @@ Accessing children nodes
 
         }
 
-    	$a = tidy_parse_string("<HTML><BODY BGCOLOR=#FFFFFF ALINK=#000000><B>Hi</B><I>Bye<U>Test</U></I></BODY></HTML>", array('newline' => 'LF'));
+        $a = tidy_parse_string("<HTML><BODY BGCOLOR=#FFFFFF ALINK=#000000><B>Hi</B><I>Bye<U>Test</U></I></BODY></HTML>", array('newline' => 'LF'));
         $html = $a->html();
         dump_nodes($html);
-            
+
 ?>
---EXPECT--
+--EXPECTF--
 bool(true)
 object(tidyNode)#3 (9) {
   ["value"]=>
@@ -70,7 +70,7 @@ object(tidyNode)#3 (9) {
       ["proprietary"]=>
       bool(false)
       ["id"]=>
-      int(111)
+      int(%i)
       ["attribute"]=>
       NULL
       ["child"]=>
@@ -94,7 +94,7 @@ object(tidyNode)#4 (9) {
   ["proprietary"]=>
   bool(false)
   ["id"]=>
-  int(111)
+  int(%i)
   ["attribute"]=>
   NULL
   ["child"]=>
@@ -148,7 +148,7 @@ object(tidyNode)#5 (9) {
       ["child"]=>
       array(1) {
         [0]=>
-        object(tidyNode)#7 (8) {
+        object(tidyNode)#7 (9) {
           ["value"]=>
           string(2) "Hi"
           ["name"]=>
@@ -161,6 +161,8 @@ object(tidyNode)#5 (9) {
           int(46)
           ["proprietary"]=>
           bool(false)
+          ["id"]=>
+          NULL
           ["attribute"]=>
           NULL
           ["child"]=>
@@ -189,7 +191,7 @@ object(tidyNode)#5 (9) {
       ["child"]=>
       array(2) {
         [0]=>
-        object(tidyNode)#9 (8) {
+        object(tidyNode)#9 (9) {
           ["value"]=>
           string(3) "Bye"
           ["name"]=>
@@ -202,6 +204,8 @@ object(tidyNode)#5 (9) {
           int(55)
           ["proprietary"]=>
           bool(false)
+          ["id"]=>
+          NULL
           ["attribute"]=>
           NULL
           ["child"]=>
@@ -222,13 +226,13 @@ object(tidyNode)#5 (9) {
           ["proprietary"]=>
           bool(false)
           ["id"]=>
-          int(114)
+          int(%i)
           ["attribute"]=>
           NULL
           ["child"]=>
           array(1) {
             [0]=>
-            object(tidyNode)#11 (8) {
+            object(tidyNode)#11 (9) {
               ["value"]=>
               string(4) "Test"
               ["name"]=>
@@ -241,6 +245,8 @@ object(tidyNode)#5 (9) {
               int(61)
               ["proprietary"]=>
               bool(false)
+              ["id"]=>
+              NULL
               ["attribute"]=>
               NULL
               ["child"]=>
@@ -273,7 +279,7 @@ object(tidyNode)#6 (9) {
   ["child"]=>
   array(1) {
     [0]=>
-    object(tidyNode)#7 (8) {
+    object(tidyNode)#7 (9) {
       ["value"]=>
       string(2) "Hi"
       ["name"]=>
@@ -286,6 +292,8 @@ object(tidyNode)#6 (9) {
       int(46)
       ["proprietary"]=>
       bool(false)
+      ["id"]=>
+      NULL
       ["attribute"]=>
       NULL
       ["child"]=>
@@ -294,7 +302,7 @@ object(tidyNode)#6 (9) {
   }
 }
 bool(true)
-object(tidyNode)#7 (8) {
+object(tidyNode)#7 (9) {
   ["value"]=>
   string(2) "Hi"
   ["name"]=>
@@ -307,6 +315,8 @@ object(tidyNode)#7 (8) {
   int(46)
   ["proprietary"]=>
   bool(false)
+  ["id"]=>
+  NULL
   ["attribute"]=>
   NULL
   ["child"]=>
@@ -332,7 +342,7 @@ object(tidyNode)#8 (9) {
   ["child"]=>
   array(2) {
     [0]=>
-    object(tidyNode)#9 (8) {
+    object(tidyNode)#9 (9) {
       ["value"]=>
       string(3) "Bye"
       ["name"]=>
@@ -345,6 +355,8 @@ object(tidyNode)#8 (9) {
       int(55)
       ["proprietary"]=>
       bool(false)
+      ["id"]=>
+      NULL
       ["attribute"]=>
       NULL
       ["child"]=>
@@ -365,13 +377,13 @@ object(tidyNode)#8 (9) {
       ["proprietary"]=>
       bool(false)
       ["id"]=>
-      int(114)
+      int(%i)
       ["attribute"]=>
       NULL
       ["child"]=>
       array(1) {
         [0]=>
-        object(tidyNode)#11 (8) {
+        object(tidyNode)#11 (9) {
           ["value"]=>
           string(4) "Test"
           ["name"]=>
@@ -384,6 +396,8 @@ object(tidyNode)#8 (9) {
           int(61)
           ["proprietary"]=>
           bool(false)
+          ["id"]=>
+          NULL
           ["attribute"]=>
           NULL
           ["child"]=>
@@ -394,7 +408,7 @@ object(tidyNode)#8 (9) {
   }
 }
 bool(true)
-object(tidyNode)#9 (8) {
+object(tidyNode)#9 (9) {
   ["value"]=>
   string(3) "Bye"
   ["name"]=>
@@ -407,6 +421,8 @@ object(tidyNode)#9 (8) {
   int(55)
   ["proprietary"]=>
   bool(false)
+  ["id"]=>
+  NULL
   ["attribute"]=>
   NULL
   ["child"]=>
@@ -426,13 +442,13 @@ object(tidyNode)#10 (9) {
   ["proprietary"]=>
   bool(false)
   ["id"]=>
-  int(114)
+  int(%i)
   ["attribute"]=>
   NULL
   ["child"]=>
   array(1) {
     [0]=>
-    object(tidyNode)#11 (8) {
+    object(tidyNode)#11 (9) {
       ["value"]=>
       string(4) "Test"
       ["name"]=>
@@ -445,6 +461,8 @@ object(tidyNode)#10 (9) {
       int(61)
       ["proprietary"]=>
       bool(false)
+      ["id"]=>
+      NULL
       ["attribute"]=>
       NULL
       ["child"]=>
@@ -453,7 +471,7 @@ object(tidyNode)#10 (9) {
   }
 }
 bool(true)
-object(tidyNode)#11 (8) {
+object(tidyNode)#11 (9) {
   ["value"]=>
   string(4) "Test"
   ["name"]=>
@@ -466,6 +484,8 @@ object(tidyNode)#11 (8) {
   int(61)
   ["proprietary"]=>
   bool(false)
+  ["id"]=>
+  NULL
   ["attribute"]=>
   NULL
   ["child"]=>

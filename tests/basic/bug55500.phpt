@@ -35,29 +35,34 @@ var_dump($_POST);
 ?>
 --EXPECTF--
 array(1) {
-  [%u|b%"file"]=>
-  array(5) {
-    [%u|b%"name"]=>
+  ["file"]=>
+  array(6) {
+    ["name"]=>
     array(1) {
       [0]=>
-      %unicode|string%(9) "file1.txt"
+      string(9) "file1.txt"
     }
-    [%u|b%"type"]=>
+    ["full_path"]=>
     array(1) {
       [0]=>
-      %unicode|string%(16) "text/plain-file1"
+      string(9) "file1.txt"
     }
-    [%u|b%"tmp_name"]=>
+    ["type"]=>
     array(1) {
       [0]=>
-      %unicode|string%(%d) "%s"
+      string(16) "text/plain-file1"
     }
-    [%u|b%"error"]=>
+    ["tmp_name"]=>
+    array(1) {
+      [0]=>
+      string(%d) "%s"
+    }
+    ["error"]=>
     array(1) {
       [0]=>
       int(0)
     }
-    [%u|b%"size"]=>
+    ["size"]=>
     array(1) {
       [0]=>
       int(1)

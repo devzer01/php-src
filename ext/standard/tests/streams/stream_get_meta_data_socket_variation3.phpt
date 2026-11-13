@@ -9,7 +9,7 @@ $server = stream_socket_server('tcp://127.0.0.1:31333');
 /* Connect to it */
 $client = fsockopen('tcp://127.0.0.1:31333');
 if (!$client) {
-	die("Unable to create socket");
+    die("Unable to create socket");
 }
 
 /* Accept that connection */
@@ -31,7 +31,13 @@ fclose($server);
 
 ?>
 --EXPECTF--
-array(7) {
+array(8) {
+  ["timed_out"]=>
+  bool(false)
+  ["blocked"]=>
+  bool(true)
+  ["eof"]=>
+  bool(false)
   ["stream_type"]=>
   string(%d) "tcp_socke%s"
   ["mode"]=>
@@ -40,38 +46,20 @@ array(7) {
   int(0)
   ["seekable"]=>
   bool(false)
-  ["timed_out"]=>
-  bool(false)
-  ["blocked"]=>
-  bool(true)
-  ["eof"]=>
-  bool(false)
+  ["uri"]=>
+  string(21) "tcp://127.0.0.1:31333"
 }
 
 
 Set blocking to false:
 bool(true)
-array(7) {
-  ["stream_type"]=>
-  string(%d) "tcp_socke%s"
-  ["mode"]=>
-  string(2) "r+"
-  ["unread_bytes"]=>
-  int(0)
-  ["seekable"]=>
-  bool(false)
+array(8) {
   ["timed_out"]=>
   bool(false)
   ["blocked"]=>
   bool(false)
   ["eof"]=>
   bool(false)
-}
-
-
-Set blocking to true:
-bool(true)
-array(7) {
   ["stream_type"]=>
   string(%d) "tcp_socke%s"
   ["mode"]=>
@@ -80,10 +68,28 @@ array(7) {
   int(0)
   ["seekable"]=>
   bool(false)
+  ["uri"]=>
+  string(21) "tcp://127.0.0.1:31333"
+}
+
+
+Set blocking to true:
+bool(true)
+array(8) {
   ["timed_out"]=>
   bool(false)
   ["blocked"]=>
   bool(true)
   ["eof"]=>
   bool(false)
+  ["stream_type"]=>
+  string(%d) "tcp_socke%s"
+  ["mode"]=>
+  string(2) "r+"
+  ["unread_bytes"]=>
+  int(0)
+  ["seekable"]=>
+  bool(false)
+  ["uri"]=>
+  string(21) "tcp://127.0.0.1:31333"
 }

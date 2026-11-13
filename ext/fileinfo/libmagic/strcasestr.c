@@ -37,7 +37,7 @@ __RCSID("$NetBSD: strcasestr.c,v 1.3 2005/11/29 03:12:00 christos Exp $");
 __RCSID("$NetBSD: strncasecmp.c,v 1.2 2007/06/04 18:19:27 christos Exp $");
 #endif /* LIBC_SCCS and not lint */
 
-#include "php_stdint.h"
+#include "file.h"
 
 #include <assert.h>
 #include <ctype.h>

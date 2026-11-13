@@ -1,13 +1,11 @@
 --TEST--
 IntlRuleBasedBreakIterator::__construct: basic test
---SKIPIF--
-<?php
-if (!extension_loaded('intl'))
-	die('skip intl extension not enabled');
+--EXTENSIONS--
+intl
+--INI--
+intl.default_locale=pt_PT
 --FILE--
 <?php
-ini_set("intl.error_level", E_WARNING);
-ini_set("intl.default_locale", "pt_PT");
 
 $rules = <<<RULES
 \$LN = [[:letter:] [:number:]];
@@ -24,8 +22,14 @@ $rules = <<<RULES
 RULES;
 $rbbi = new IntlRuleBasedBreakIterator($rules);
 var_dump(get_class($rbbi));
+
+try {
+    $obj = new IntlRuleBasedBreakIterator('[\p{Letter}\uFFFD]+;[:number:]+', 'aoeu');
+} catch (IntlException $e) {
+    echo $e::class, ': ', $e->getMessage(), "\n";
+}
+
 ?>
-==DONE==
 --EXPECT--
 string(26) "IntlRuleBasedBreakIterator"
-==DONE==
+IntlException: IntlRuleBasedBreakIterator::__construct(): unable to create instance from compiled rules

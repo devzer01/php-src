@@ -1,7 +1,5 @@
 --TEST--
 json_encode() tests
---SKIPIF--
-<?php if (!extension_loaded("json")) print "skip"; ?>
 --FILE--
 <?php
 
@@ -20,10 +18,9 @@ var_dump(json_encode(array(), JSON_FORCE_OBJECT));
 var_dump(json_encode(1));
 var_dump(json_encode("руссиш"));
 
-
 echo "Done\n";
 ?>
---EXPECTF--	
+--EXPECT--
 string(2) """"
 string(4) "null"
 string(4) "true"

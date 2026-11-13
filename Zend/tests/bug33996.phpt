@@ -19,11 +19,19 @@ function NormalTest($a)
     echo "Hi!";
 }
 
-NormalTest();
-FooTest();
+try {
+    NormalTest();
+} catch (Throwable $e) {
+    echo $e::class, ': ', $e->getMessage(), "\n";
+}
+try {
+    FooTest();
+} catch (Throwable $e) {
+    echo $e::class, ': ', $e->getMessage(), "\n";
+}
 FooTest(new Foo());
 ?>
 --EXPECTF--
-Warning: Missing argument 1 for NormalTest(), called in %sbug33996.php on line %d and defined in %sbug33996.php on line %d
-Hi!
-Catchable fatal error: Argument 1 passed to FooTest() must be an instance of Foo, none given, called in %sbug33996.php on line %d and defined in %sbug33996.php on line %d
+ArgumentCountError: Too few arguments to function NormalTest(), 0 passed in %sbug33996.php on line 18 and exactly 1 expected
+ArgumentCountError: Too few arguments to function FooTest(), 0 passed in %sbug33996.php on line 23 and exactly 1 expected
+Hello!

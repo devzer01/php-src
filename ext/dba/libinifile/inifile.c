@@ -1,16 +1,12 @@
 /*
    +----------------------------------------------------------------------+
-   | PHP Version 7                                                        |
+   | Copyright © The PHP Group and Contributors.                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2015 The PHP Group                                |
-   +----------------------------------------------------------------------+
-   | This source file is subject to version 3.01 of the PHP license,      |
-   | that is bundled with this package in the file LICENSE, and is        |
-   | available through the world-wide-web at the following url:           |
-   | http://www.php.net/license/3_01.txt                                  |
-   | If you did not receive a copy of the PHP license and are unable to   |
-   | obtain it through the world-wide-web, please send a note to          |
-   | license@php.net so we can mail you a copy immediately.               |
+   | This source file is subject to the Modified BSD License that is      |
+   | bundled with this package in the file LICENSE, and is available      |
+   | through the World Wide Web at <https://www.php.net/license/>.        |
+   |                                                                      |
+   | SPDX-License-Identifier: BSD-3-Clause                                |
    +----------------------------------------------------------------------+
    | Author: Marcus Boerger <helly@php.net>                               |
    +----------------------------------------------------------------------+
@@ -28,7 +24,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#if HAVE_UNISTD_H
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 
@@ -40,7 +36,7 @@
  */
 
 /* {{{ inifile_version */
-char *inifile_version()
+const char *inifile_version(void)
 {
 	return "1.0, $Id$";
 }
@@ -113,7 +109,7 @@ void inifile_free(inifile *dba, int persistent)
 key_type inifile_key_split(const char *group_name)
 {
 	key_type key;
-	char *name;
+	const char *name;
 
 	if (group_name[0] == '[' && (name = strchr(group_name, ']')) != NULL) {
 		key.group = estrndup(group_name+1, name - (group_name + 1));
@@ -162,8 +158,7 @@ static char *etrim(const char *str)
 }
 /* }}} */
 
-/* {{{ inifile_findkey
- */
+/* {{{ inifile_findkey */
 static int inifile_read(inifile *dba, line_type *ln) {
 	char *fline;
 	char *pos;
@@ -240,19 +235,19 @@ static int inifile_key_cmp(const key_type *k1, const key_type *k2)
 }
 /* }}} */
 
-/* {{{ inifile_fetch
- */
+/* {{{ inifile_fetch */
 val_type inifile_fetch(inifile *dba, const key_type *key, int skip) {
-	line_type ln = {{NULL,NULL},{NULL}};
+	line_type ln = {{NULL,NULL},{NULL},0};
 	val_type val;
 	int res, grp_eq = 0;
 
 	if (skip == -1 && dba->next.key.group && dba->next.key.name && !inifile_key_cmp(&dba->next.key, key)) {
 		/* we got position already from last fetch */
 		php_stream_seek(dba->fp, dba->next.pos, SEEK_SET);
+		ln.key.group = estrdup(dba->next.key.group);
 	} else {
 		/* specific instance or not same key -> restart search */
-		/* the slow way: restart and seacrch */
+		/* the slow way: restart and search */
 		php_stream_rewind(dba->fp);
 		inifile_line_free(&dba->next);
 	}
@@ -283,8 +278,7 @@ val_type inifile_fetch(inifile *dba, const key_type *key, int skip) {
 }
 /* }}} */
 
-/* {{{ inifile_firstkey
- */
+/* {{{ inifile_firstkey */
 int inifile_firstkey(inifile *dba) {
 	inifile_line_free(&dba->curr);
 	dba->curr.pos = 0;
@@ -292,10 +286,9 @@ int inifile_firstkey(inifile *dba) {
 }
 /* }}} */
 
-/* {{{ inifile_nextkey
- */
+/* {{{ inifile_nextkey */
 int inifile_nextkey(inifile *dba) {
-	line_type ln = {{NULL,NULL},{NULL}};
+	line_type ln = {{NULL,NULL},{NULL},0};
 
 	/*inifile_line_free(&dba->next); ??? */
 	php_stream_seek(dba->fp, dba->curr.pos, SEEK_SET);
@@ -307,8 +300,7 @@ int inifile_nextkey(inifile *dba) {
 }
 /* }}} */
 
-/* {{{ inifile_truncate
- */
+/* {{{ inifile_truncate */
 static int inifile_truncate(inifile *dba, size_t size)
 {
 	int res;
@@ -336,7 +328,7 @@ static int inifile_find_group(inifile *dba, const key_type *key, size_t *pos_grp
 
 	if (key->group && strlen(key->group)) {
 		int res;
-		line_type ln = {{NULL,NULL},{NULL}};
+		line_type ln = {{NULL,NULL},{NULL},0};
 
 		res = 1;
 		while(inifile_read(dba, &ln)) {
@@ -365,7 +357,7 @@ static int inifile_find_group(inifile *dba, const key_type *key, size_t *pos_grp
 static int inifile_next_group(inifile *dba, const key_type *key, size_t *pos_grp_start)
 {
 	int ret = FAILURE;
-	line_type ln = {{NULL,NULL},{NULL}};
+	line_type ln = {{NULL,NULL},{NULL},0};
 
 	*pos_grp_start = php_stream_tell(dba->fp);
 	ln.key.group = estrdup(key->group);
@@ -381,8 +373,7 @@ static int inifile_next_group(inifile *dba, const key_type *key, size_t *pos_grp
 }
 /* }}} */
 
-/* {{{ inifile_copy_to
- */
+/* {{{ inifile_copy_to */
 static int inifile_copy_to(inifile *dba, size_t pos_start, size_t pos_end, inifile **ini_copy)
 {
 	php_stream *fp;
@@ -413,11 +404,11 @@ static int inifile_copy_to(inifile *dba, size_t pos_start, size_t pos_end, inifi
 /* {{{ inifile_filter
  * copy from to dba while ignoring key name (group must equal)
  */
-static int inifile_filter(inifile *dba, inifile *from, const key_type *key, zend_bool *found)
+static int inifile_filter(inifile *dba, inifile *from, const key_type *key, bool *found)
 {
 	size_t pos_start = 0, pos_next = 0, pos_curr;
 	int ret = SUCCESS;
-	line_type ln = {{NULL,NULL},{NULL}};
+	line_type ln = {{NULL,NULL},{NULL},0};
 
 	php_stream_seek(from->fp, 0, SEEK_SET);
 	php_stream_seek(dba->fp, 0, SEEK_END);
@@ -425,7 +416,7 @@ static int inifile_filter(inifile *dba, inifile *from, const key_type *key, zend
 		switch(inifile_key_cmp(&ln.key, key)) {
 		case 0:
 			if (found) {
-				*found = (zend_bool) 1;
+				*found = (bool) 1;
 			}
 			pos_curr = php_stream_tell(from->fp);
 			if (pos_start != pos_next) {
@@ -459,9 +450,8 @@ static int inifile_filter(inifile *dba, inifile *from, const key_type *key, zend
 }
 /* }}} */
 
-/* {{{ inifile_delete_replace_append
- */
-static int inifile_delete_replace_append(inifile *dba, const key_type *key, const val_type *value, int append, zend_bool *found)
+/* {{{ inifile_delete_replace_append */
+static int inifile_delete_replace_append(inifile *dba, const key_type *key, const val_type *value, int append, bool *found)
 {
 	size_t pos_grp_start=0, pos_grp_next;
 	inifile *ini_tmp = NULL;
@@ -479,7 +469,7 @@ static int inifile_delete_replace_append(inifile *dba, const key_type *key, cons
 	 * 8) Append temporary stream
 	 */
 
-	assert(!append || (key->name && value)); /* missuse */
+	assert(!append || (key->name && value)); /* misuse */
 
 	/* 1 - 3 */
 	inifile_find_group(dba, key, &pos_grp_start);
@@ -542,7 +532,7 @@ static int inifile_delete_replace_append(inifile *dba, const key_type *key, cons
 			php_stream_seek(fp_tmp, 0, SEEK_SET);
 			php_stream_seek(dba->fp, 0, SEEK_END);
 			if (SUCCESS != php_stream_copy_to_stream_ex(fp_tmp, dba->fp, PHP_STREAM_COPY_ALL, NULL)) {
-				php_error_docref(NULL, E_RECOVERABLE_ERROR, "Could not copy from temporary stream - ini file truncated");
+				zend_throw_error(NULL, "Could not copy from temporary stream - ini file truncated");
 				ret = FAILURE;
 			}
 		}
@@ -562,51 +552,37 @@ static int inifile_delete_replace_append(inifile *dba, const key_type *key, cons
 }
 /* }}} */
 
-/* {{{ inifile_delete
- */
+/* {{{ inifile_delete */
 int inifile_delete(inifile *dba, const key_type *key)
 {
 	return inifile_delete_replace_append(dba, key, NULL, 0, NULL);
 }
 /* }}} */
 
-/* {{{ inifile_delete_ex
- */
-int inifile_delete_ex(inifile *dba, const key_type *key, zend_bool *found)
+/* {{{ inifile_delete_ex */
+int inifile_delete_ex(inifile *dba, const key_type *key, bool *found)
 {
 	return inifile_delete_replace_append(dba, key, NULL, 0, found);
 }
 /* }}} */
 
-/* {{{ inifile_relace
- */
+/* {{{ inifile_relace */
 int inifile_replace(inifile *dba, const key_type *key, const val_type *value)
 {
 	return inifile_delete_replace_append(dba, key, value, 0, NULL);
 }
 /* }}} */
 
-/* {{{ inifile_replace_ex
- */
-int inifile_replace_ex(inifile *dba, const key_type *key, const val_type *value, zend_bool *found)
+/* {{{ inifile_replace_ex */
+int inifile_replace_ex(inifile *dba, const key_type *key, const val_type *value, bool *found)
 {
 	return inifile_delete_replace_append(dba, key, value, 0, found);
 }
 /* }}} */
 
-/* {{{ inifile_append
- */
+/* {{{ inifile_append */
 int inifile_append(inifile *dba, const key_type *key, const val_type *value)
 {
 	return inifile_delete_replace_append(dba, key, value, 1, NULL);
 }
 /* }}} */
-
-/*
- * Local variables:
- * tab-width: 4
- * c-basic-offset: 4
- * End:
- * vim600: sw=4 ts=4 fdm=marker
- * vim<600: sw=4 ts=4
- */

@@ -2,12 +2,14 @@
 Bug #65272: flock() correctly sets wouldblock out param in windows
 --SKIPIF--
 <?php
-if (stripos(PHP_OS, 'win') !== 0) die("skip windows required");
+if (PHP_OS_FAMILY === 'Solaris') {
+    die("skip: Solaris flock() uses fcntl semantics - per-process (not per-file-descriptor)");
+}
 ?>
 --FILE--
 <?php
 
-$file = dirname(__FILE__)."/flock.dat";
+$file = __DIR__."/flock_bug65272.dat";
 
 $fp1 = fopen($file, "w");
 var_dump(flock($fp1, LOCK_SH));
@@ -16,10 +18,14 @@ $fp2 = fopen($file, "r");
 var_dump(flock($fp2, LOCK_EX|LOCK_NB, $wouldblock));
 var_dump($wouldblock);
 
-@unlink($file);
 echo "Done\n";
 ?>
---EXPECTF--
+--CLEAN--
+<?php
+$file = __DIR__."/flock_bug65272.dat";
+unlink($file);
+?>
+--EXPECT--
 bool(true)
 bool(false)
 int(1)

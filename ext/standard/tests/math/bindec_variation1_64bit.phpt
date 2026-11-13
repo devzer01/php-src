@@ -6,15 +6,7 @@ if (PHP_INT_SIZE != 8) die("skip this test is for 64bit platform only");
 ?>
 --FILE--
 <?php
-/* Prototype  : number bindec  ( string $binary_string  )
- * Description: Returns the decimal equivalent of the binary number represented by the binary_string  argument.
- * Source code: ext/standard/math.c
- */
-
 echo "*** Testing bindec() : usage variations ***\n";
-//get an unset variable
-$unset_var = 10;
-unset ($unset_var);
 
 // heredoc string
 $heredoc = <<<EOT
@@ -39,16 +31,12 @@ $inputs = array(
        12.3456789000E-10,
        .5,
 
-       // null data
-/*10*/ NULL,
-       null,
-
        // boolean data
 /*12*/ true,
        false,
        TRUE,
        FALSE,
-       
+
        // empty data
 /*16*/ "",
        '',
@@ -58,12 +46,6 @@ $inputs = array(
 /*19*/ "abcxyz",
        'abcxyz',
        $heredoc,
-       
-       // undefined data
-/*22*/ @$undefined_var,
-
-       // unset data
-/*23*/ @$unset_var,
 
        // resource variable
 /*24*/ $fp
@@ -72,13 +54,16 @@ $inputs = array(
 // loop through each element of $inputs to check the behaviour of bindec()
 $iterator = 1;
 foreach($inputs as $input) {
-	echo "\n-- Iteration $iterator --\n";
-	var_dump(bindec($input));
-	$iterator++;
+    echo "\n-- Iteration $iterator --\n";
+    try {
+        var_dump(bindec($input));
+    } catch (Throwable $e) {
+        echo $e::class, ': ', $e->getMessage(), "\n";
+    }
+    $iterator++;
 };
 fclose($fp);
 ?>
-===Done===
 --EXPECTF--
 *** Testing bindec() : usage variations ***
 
@@ -89,28 +74,28 @@ int(0)
 int(1)
 
 -- Iteration 3 --
-int(1)
+Exception: Invalid characters passed for attempted conversion
 
 -- Iteration 4 --
-int(0)
+Exception: Invalid characters passed for attempted conversion
 
 -- Iteration 5 --
-int(2)
+Exception: Invalid characters passed for attempted conversion
 
 -- Iteration 6 --
-int(2)
+Exception: Invalid characters passed for attempted conversion
 
 -- Iteration 7 --
-int(8)
+Exception: Invalid characters passed for attempted conversion
 
 -- Iteration 8 --
-int(1)
+Exception: Invalid characters passed for attempted conversion
 
 -- Iteration 9 --
-int(0)
+Exception: Invalid characters passed for attempted conversion
 
 -- Iteration 10 --
-int(0)
+int(1)
 
 -- Iteration 11 --
 int(0)
@@ -122,37 +107,22 @@ int(1)
 int(0)
 
 -- Iteration 14 --
-int(1)
+int(0)
 
 -- Iteration 15 --
 int(0)
 
 -- Iteration 16 --
-int(0)
+TypeError: bindec(): Argument #1 ($binary_string) must be of type string, array given
 
 -- Iteration 17 --
-int(0)
+Exception: Invalid characters passed for attempted conversion
 
 -- Iteration 18 --
-
-Notice: Array to string conversion in %s on line %d
-int(0)
+Exception: Invalid characters passed for attempted conversion
 
 -- Iteration 19 --
-int(0)
+Exception: Invalid characters passed for attempted conversion
 
 -- Iteration 20 --
-int(0)
-
--- Iteration 21 --
-int(0)
-
--- Iteration 22 --
-int(0)
-
--- Iteration 23 --
-int(0)
-
--- Iteration 24 --
-int(%d)
-===Done===
+TypeError: bindec(): Argument #1 ($binary_string) must be of type string, resource given

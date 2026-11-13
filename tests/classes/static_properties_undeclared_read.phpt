@@ -6,4 +6,7 @@ Class C {}
 echo C::$p;
 ?>
 --EXPECTF--
-Fatal error: Access to undeclared static property: C::$p in %s on line 3
+Fatal error: Uncaught Error: Access to undeclared static property C::$p in %s:%d
+Stack trace:
+#0 {main}
+  thrown in %s on line 3

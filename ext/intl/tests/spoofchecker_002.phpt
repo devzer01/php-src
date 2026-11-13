@@ -1,7 +1,7 @@
 --TEST--
 spoofchecker confusable tests
---SKIPIF--
-<?php if(!extension_loaded('intl') || !class_exists("Spoofchecker")) print 'skip'; ?>
+--EXTENSIONS--
+intl
 --FILE--
 <?php
 
@@ -13,7 +13,7 @@ var_dump($x->areConfusable("hello, world", "goodbye, world"));
 var_dump($x->areConfusable("hello, world", "hello, world"));
 var_dump($x->areConfusable("hello, world", "he11o, wor1d"));
 ?>
---EXPECTF--
+--EXPECT--
 Checking if words are confusable
 bool(false)
 bool(true)

@@ -1,9 +1,10 @@
 --TEST--
 Bug #63921 sqlite3::bindvalue and relative PHP functions aren't using sqlite3_*_int64 API
+--EXTENSIONS--
+sqlite3
 --SKIPIF--
 <?php
-if (!extension_loaded('sqlite3')) die('skip');
-if (PHP_INT_SIZE > 4) die('skip'); // skip for 64bit builds - there is another test for that
+if (PHP_INT_SIZE > 4) die('skip 32-bit only'); // skip for 64bit builds - there is another test for that
 ?>
 --FILE--
 <?php
@@ -24,4 +25,4 @@ var_dump($num,$result[0]);
 ?>
 --EXPECT--
 int(2147483647)
-string(10) "2147483647"
+int(2147483647)

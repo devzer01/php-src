@@ -1,7 +1,8 @@
 --TEST--
-Attempting to access static properties using instance property syntax 
+Attempting to access static properties using instance property syntax
 --FILE--
 <?php
+#[AllowDynamicProperties]
 class C {
     public static $x = 'C::$x';
     protected static $y = 'C::$y';
@@ -25,25 +26,23 @@ var_dump(isset($c->y));
 //$c->y = 1;		// Fatal error, tested in static_properties_003_error3.phpt
 //$c->y =& $ref;	// Fatal error, tested in static_properties_003_error4.phpt
 ?>
-==Done==
 --EXPECTF--
 --> Access visible static prop like instance prop:
 bool(false)
 
-Strict Standards: Accessing static property C::$x as non static in %s on line 11
+Notice: Accessing static property C::$x as non static in %s on line 12
 
-Strict Standards: Accessing static property C::$x as non static in %s on line 12
+Notice: Accessing static property C::$x as non static in %s on line 13
 
-Notice: Undefined property: C::$x in %s on line 12
+Warning: Undefined property: C::$x in %s on line %d
 
-Strict Standards: Accessing static property C::$x as non static in %s on line 13
+Notice: Accessing static property C::$x as non static in %s on line 14
 
-Strict Standards: Accessing static property C::$x as non static in %s on line 15
+Notice: Accessing static property C::$x as non static in %s on line 16
 
-Strict Standards: Accessing static property C::$x as non static in %s on line 16
-%unicode|string%(3) "ref"
-%unicode|string%(5) "C::$x"
+Notice: Accessing static property C::$x as non static in %s on line 17
+string(3) "ref"
+string(5) "C::$x"
 
 --> Access non-visible static prop like instance prop:
 bool(false)
-==Done==

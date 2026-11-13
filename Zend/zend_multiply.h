@@ -2,39 +2,46 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2015 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright © Zend Technologies Ltd., a subsidiary company of          |
+   |     Perforce Software, Inc., and Contributors.                       |
    +----------------------------------------------------------------------+
-   | This source file is subject to version 2.00 of the Zend license,     |
-   | that is bundled with this package in the file LICENSE, and is        |
-   | available through the world-wide-web at the following url:           |
-   | http://www.zend.com/license/2_00.txt.                                |
-   | If you did not receive a copy of the Zend license and are unable to  |
-   | obtain it through the world-wide-web, please send a note to          |
-   | license@zend.com so we can mail you a copy immediately.              |
+   | This source file is subject to the Modified BSD License that is      |
+   | bundled with this package in the file LICENSE, and is available      |
+   | through the World Wide Web at <https://www.php.net/license/>.        |
+   |                                                                      |
+   | SPDX-License-Identifier: BSD-3-Clause                                |
    +----------------------------------------------------------------------+
    | Authors: Sascha Schumann <sascha@schumann.cx>                        |
    |          Ard Biesheuvel <ard.biesheuvel@linaro.org>                  |
    +----------------------------------------------------------------------+
 */
 
-/* $Id$ */
+#include "zend_portability.h"
 
 #ifndef ZEND_MULTIPLY_H
 #define ZEND_MULTIPLY_H
 
-#if defined(__i386__) && defined(__GNUC__)
+#if defined(PHP_HAVE_BUILTIN_SMULL_OVERFLOW) && SIZEOF_LONG == SIZEOF_ZEND_LONG
 
 #define ZEND_SIGNED_MULTIPLY_LONG(a, b, lval, dval, usedval) do {	\
-	zend_long __tmpvar; 													\
-	__asm__ ("imul %3,%0\n"											\
-		"adc $0,%1" 												\
-			: "=r"(__tmpvar),"=r"(usedval) 							\
-			: "0"(a), "r"(b), "1"(0));								\
-	if (usedval) (dval) = (double) (a) * (double) (b);				\
+	long __tmpvar;		 											\
+	if (((usedval) = __builtin_smull_overflow((a), (b), &__tmpvar))) {	\
+		(dval) = (double) (a) * (double) (b);						\
+	}																\
 	else (lval) = __tmpvar;											\
 } while (0)
 
-#elif defined(__x86_64__) && defined(__GNUC__)
+#elif defined(PHP_HAVE_BUILTIN_SMULLL_OVERFLOW) && SIZEOF_LONG_LONG == SIZEOF_ZEND_LONG
+
+#define ZEND_SIGNED_MULTIPLY_LONG(a, b, lval, dval, usedval) do {	\
+	long long __tmpvar; 											\
+	if (((usedval) = __builtin_smulll_overflow((a), (b), &__tmpvar))) {	\
+		(dval) = (double) (a) * (double) (b);						\
+	}																\
+	else (lval) = __tmpvar;											\
+} while (0)
+
+#elif (defined(__i386__) || defined(__x86_64__)) && defined(__GNUC__)
 
 #define ZEND_SIGNED_MULTIPLY_LONG(a, b, lval, dval, usedval) do {	\
 	zend_long __tmpvar; 													\
@@ -65,41 +72,47 @@
 	__asm__("mul %0, %2, %3\n"										\
 		"smulh %1, %2, %3\n"										\
 		"sub %1, %1, %0, asr #63\n"									\
-			: "=X"(__tmpvar), "=X"(usedval)							\
-			: "X"(a), "X"(b));										\
+			: "=&r"(__tmpvar), "=&r"(usedval)						\
+			: "r"(a), "r"(b));										\
 	if (usedval) (dval) = (double) (a) * (double) (b);				\
 	else (lval) = __tmpvar;											\
 } while (0)
 
-#elif defined(ZEND_WIN32)
+#elif defined(ZEND_WIN32) && SIZEOF_LONG_LONG == SIZEOF_ZEND_LONG
 
 #define ZEND_SIGNED_MULTIPLY_LONG(a, b, lval, dval, usedval) do {	\
-	zend_long   __lres  = (a) * (b);										\
-	long double __dres  = (long double)(a) * (long double)(b);		\
-	long double __delta = (long double) __lres - __dres;			\
-	if ( ((usedval) = (( __dres + __delta ) != __dres))) {			\
-		(dval) = __dres;											\
-	} else {														\
-		(lval) = __lres;											\
+	long long __tmpvar; 											\
+	if (((usedval) = FAILED(LongLongMult((a), (b), &__tmpvar)))) {	\
+		(dval) = (double) (a) * (double) (b);						\
 	}																\
+	else (lval) = __tmpvar;											\
+} while (0)
+
+#elif defined(ZEND_WIN32) && SIZEOF_LONG == SIZEOF_ZEND_LONG
+
+#define ZEND_SIGNED_MULTIPLY_LONG(a, b, lval, dval, usedval) do {	\
+	long __tmpvar; 													\
+	if (((usedval) = FAILED(LongMult((a), (b), &__tmpvar)))) {		\
+		(dval) = (double) (a) * (double) (b);						\
+	}																\
+	else (lval) = __tmpvar;											\
 } while (0)
 
 #elif defined(__powerpc64__) && defined(__GNUC__)
 
-#define ZEND_SIGNED_MULTIPLY_LONG(a, b, lval, dval, usedval) do {  \
-   long __tmpvar;                          \
-   __asm__("li 14, 0\n\t"                          \
-       "mtxer 14\n\t"                                          \
-       "mulldo. %0, %2,%3\n\t"                 \
-       "xor %1, %1, %1\n\t"                    \
-       "bns+ 0f\n\t"                       \
-        "li %1, 1\n\t"                     \
-        "0:\n"                         \
-           : "=r"(__tmpvar),"=r"(usedval)          \
-           : "r"(a), "r"(b)                \
-           : "r14", "cc");                 \
-   if (usedval) (dval) = (double) (a) * (double) (b);      \
-   else (lval) = __tmpvar;                     \
+#define ZEND_SIGNED_MULTIPLY_LONG(a, b, lval, dval, usedval) do {	\
+	long __low, __high;						\
+	__asm__("mulld %0,%2,%3\n\t"					\
+		"mulhd %1,%2,%3\n"					\
+		: "=&r"(__low), "=&r"(__high)				\
+		: "r"(a), "r"(b));					\
+	if ((__low >> 63) != __high) {					\
+		(dval) = (double) (a) * (double) (b);			\
+		(usedval) = 1;						\
+	} else {							\
+		(lval) = __low;						\
+		(usedval) = 0;						\
+	}								\
 } while (0)
 
 #elif SIZEOF_ZEND_LONG == 4
@@ -132,16 +145,25 @@
 
 #if defined(__GNUC__) && (defined(__native_client__) || defined(i386))
 
-static zend_always_inline size_t zend_safe_address(size_t nmemb, size_t size, size_t offset, int *overflow)
+static zend_always_inline size_t zend_safe_address(size_t nmemb, size_t size, size_t offset, bool *overflow)
 {
 	size_t res = nmemb;
 	size_t m_overflow = 0;
 
-	__asm__ ("mull %3\n\taddl %4,%0\n\tadcl $0,%1"
+	if (ZEND_CONST_COND(offset == 0, 0)) {
+		__asm__ ("mull %3\n\tadcl $0,%1"
+	     : "=&a"(res), "=&d" (m_overflow)
+	     : "%0"(res),
+	       "rm"(size)
+	     : "cc");
+	} else {
+		__asm__ ("mull %3\n\taddl %4,%0\n\tadcl $0,%1"
 	     : "=&a"(res), "=&d" (m_overflow)
 	     : "%0"(res),
 	       "rm"(size),
-	       "rm"(offset));
+	       "rm"(offset)
+	     : "cc");
+	}
 
 	if (UNEXPECTED(m_overflow)) {
 		*overflow = 1;
@@ -153,9 +175,9 @@ static zend_always_inline size_t zend_safe_address(size_t nmemb, size_t size, si
 
 #elif defined(__GNUC__) && defined(__x86_64__)
 
-static zend_always_inline size_t zend_safe_address(size_t nmemb, size_t size, size_t offset, int *overflow)
+static zend_always_inline size_t zend_safe_address(size_t nmemb, size_t size, size_t offset, bool *overflow)
 {
-	size_t res = nmemb;
+	size_t res;
 	zend_ulong m_overflow = 0;
 
 #ifdef __ILP32__ /* x32 */
@@ -164,14 +186,32 @@ static zend_always_inline size_t zend_safe_address(size_t nmemb, size_t size, si
 # define LP_SUFF "q"
 #endif
 
-	__asm__ ("mul" LP_SUFF  " %3\n\t"
-		"add %4,%0\n\t"
-		"adc $0,%1"
-		: "=&a"(res), "=&d" (m_overflow)
-		: "%0"(res),
-		  "rm"(size),
-		  "rm"(offset));
-
+	if (ZEND_CONST_COND(offset == 0, 0)) {
+		res = nmemb;
+		__asm__ ("mul" LP_SUFF  " %3\n\t"
+			"adc $0,%1"
+			: "=&a"(res), "=&d" (m_overflow)
+			: "%0"(res),
+			  "rm"(size)
+			: "cc");
+	} else if (ZEND_CONST_COND(nmemb == 1, 0)) {
+		res = size;
+		__asm__ ("add %2, %0\n\t"
+			"adc $0,%1"
+			: "+r"(res), "+r" (m_overflow)
+			: "rm"(offset)
+			: "cc");
+	} else {
+		res = nmemb;
+		__asm__ ("mul" LP_SUFF  " %3\n\t"
+			"add %4,%0\n\t"
+			"adc $0,%1"
+			: "=&a"(res), "=&d" (m_overflow)
+			: "%0"(res),
+			  "rm"(size),
+			  "rm"(offset)
+			: "cc");
+	}
 #undef LP_SUFF
 	if (UNEXPECTED(m_overflow)) {
 		*overflow = 1;
@@ -183,7 +223,7 @@ static zend_always_inline size_t zend_safe_address(size_t nmemb, size_t size, si
 
 #elif defined(__GNUC__) && defined(__arm__)
 
-static zend_always_inline size_t zend_safe_address(size_t nmemb, size_t size, size_t offset, int *overflow)
+static zend_always_inline size_t zend_safe_address(size_t nmemb, size_t size, size_t offset, bool *overflow)
 {
 	size_t res;
 	zend_ulong m_overflow;
@@ -205,7 +245,7 @@ static zend_always_inline size_t zend_safe_address(size_t nmemb, size_t size, si
 
 #elif defined(__GNUC__) && defined(__aarch64__)
 
-static zend_always_inline size_t zend_safe_address(size_t nmemb, size_t size, size_t offset, int *overflow)
+static zend_always_inline size_t zend_safe_address(size_t nmemb, size_t size, size_t offset, bool *overflow)
 {
 	size_t res;
 	zend_ulong m_overflow;
@@ -214,7 +254,8 @@ static zend_always_inline size_t zend_safe_address(size_t nmemb, size_t size, si
 		: "=&r"(res), "=&r"(m_overflow)
 		: "r"(nmemb),
 		  "r"(size),
-		  "r"(offset));
+		  "r"(offset)
+		: "cc");
 
 	if (UNEXPECTED(m_overflow)) {
 		*overflow = 1;
@@ -226,7 +267,7 @@ static zend_always_inline size_t zend_safe_address(size_t nmemb, size_t size, si
 
 #elif defined(__GNUC__) && defined(__powerpc64__)
 
-static zend_always_inline size_t zend_safe_address(size_t nmemb, size_t size, size_t offset, int *overflow)
+static zend_always_inline size_t zend_safe_address(size_t nmemb, size_t size, size_t offset, bool *overflow)
 {
         size_t res;
         unsigned long m_overflow;
@@ -238,7 +279,8 @@ static zend_always_inline size_t zend_safe_address(size_t nmemb, size_t size, si
              : "=&r"(res), "=&r"(m_overflow)
              : "r"(nmemb),
                "r"(size),
-               "r"(offset));
+               "r"(offset)
+             : "xer");
 
         if (UNEXPECTED(m_overflow)) {
                 *overflow = 1;
@@ -250,7 +292,7 @@ static zend_always_inline size_t zend_safe_address(size_t nmemb, size_t size, si
 
 #elif SIZEOF_SIZE_T == 4
 
-static zend_always_inline size_t zend_safe_address(size_t nmemb, size_t size, size_t offset, int *overflow)
+static zend_always_inline size_t zend_safe_address(size_t nmemb, size_t size, size_t offset, bool *overflow)
 {
 	uint64_t res = (uint64_t) nmemb * (uint64_t) size + (uint64_t) offset;
 
@@ -262,9 +304,22 @@ static zend_always_inline size_t zend_safe_address(size_t nmemb, size_t size, si
 	return (size_t) res;
 }
 
+#elif defined(_MSC_VER)
+
+static zend_always_inline size_t zend_safe_address(size_t nmemb, size_t size, size_t offset, bool *overflow)
+{
+	size_t res;
+	if (UNEXPECTED(FAILED(ULongLongMult(nmemb, size, &res)) || FAILED(ULongLongAdd(res, offset, &res)))) {
+		*overflow = 1;
+		return 0;
+	}
+	*overflow = 0;
+	return res;
+}
+
 #else
 
-static zend_always_inline size_t zend_safe_address(size_t nmemb, size_t size, size_t offset, int *overflow)
+static zend_always_inline size_t zend_safe_address(size_t nmemb, size_t size, size_t offset, bool *overflow)
 {
 	size_t res = nmemb * size + offset;
 	double _d  = (double)nmemb * (double)size + (double)offset;
@@ -279,12 +334,27 @@ static zend_always_inline size_t zend_safe_address(size_t nmemb, size_t size, si
 }
 #endif
 
-#endif /* ZEND_MULTIPLY_H */
+static zend_always_inline size_t zend_safe_address_guarded(size_t nmemb, size_t size, size_t offset)
+{
+	bool overflow;
+	size_t ret = zend_safe_address(nmemb, size, offset, &overflow);
 
-/*
- * Local variables:
- * tab-width: 4
- * c-basic-offset: 4
- * indent-tabs-mode: t
- * End:
- */
+	if (UNEXPECTED(overflow)) {
+		zend_error_noreturn(E_ERROR, "Possible integer overflow in memory allocation (%zu * %zu + %zu)", nmemb, size, offset);
+	}
+	return ret;
+}
+
+/* A bit more generic version of the same */
+static zend_always_inline size_t zend_safe_addmult(size_t nmemb, size_t size, size_t offset, const char *message)
+{
+	bool overflow;
+	size_t ret = zend_safe_address(nmemb, size, offset, &overflow);
+
+	if (UNEXPECTED(overflow)) {
+		zend_error_noreturn(E_ERROR, "Possible integer overflow in %s (%zu * %zu + %zu)", message, nmemb, size, offset);
+	}
+	return ret;
+}
+
+#endif /* ZEND_MULTIPLY_H */

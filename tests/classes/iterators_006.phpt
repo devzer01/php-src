@@ -1,54 +1,53 @@
 --TEST--
 ZE2 iterators and array wrapping
---SKIPIF--
-<?php if (version_compare(zend_version(), '2.0.0-dev', '<')) die('skip ZendEngine 2 is needed'); ?> 
 --FILE--
 <?php
 
 class ai implements Iterator {
 
-	private $array;
+    private $array;
+    private $key;
+    private $current;
 
-	function __construct() {
-		$this->array = array('foo', 'bar', 'baz');
-	}
+    function __construct() {
+        $this->array = array('foo', 'bar', 'baz');
+    }
 
-	function rewind() {
-		reset($this->array);
-		$this->next();
-	}
+    function rewind(): void {
+        reset($this->array);
+        $this->next();
+    }
 
-	function valid() {
-		return $this->key !== NULL;
-	}
+    function valid(): bool {
+        return $this->key !== NULL;
+    }
 
-	function key() {
-		return $this->key;
-	}
+    function key(): mixed {
+        return $this->key;
+    }
 
-	function current() {
-		return $this->current;
-	}
+    function current(): mixed {
+        return $this->current;
+    }
 
-	function next() {
-		list($this->key, $this->current) = each($this->array);
-//		list($key, $current) = each($this->array);
-//		$this->key = $key;
-//		$this->current = $current;
-	}
+    function next(): void {
+        $this->key = key($this->array);
+        $this->current = current($this->array);
+        next($this->array);
+    }
 }
 
 class a implements IteratorAggregate {
 
-	public function getIterator() {
-		return new ai();
-	}
+    public function getIterator(): Traversable {
+        return new ai();
+    }
 }
 
 $array = new a();
 
 foreach ($array as $property => $value) {
-	print "$property: $value\n";    
+    print "$property: $value\n";
 }
 
 #$array = $array->getIterator();
@@ -61,17 +60,16 @@ echo "===2nd===\n";
 $array = new ai();
 
 foreach ($array as $property => $value) {
-	print "$property: $value\n";    
+    print "$property: $value\n";
 }
 
 echo "===3rd===\n";
 
 foreach ($array as $property => $value) {
-	print "$property: $value\n";    
+    print "$property: $value\n";
 }
 
 ?>
-===DONE===
 --EXPECT--
 0: foo
 1: bar
@@ -84,4 +82,3 @@ foreach ($array as $property => $value) {
 0: foo
 1: bar
 2: baz
-===DONE===

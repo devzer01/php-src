@@ -28,6 +28,7 @@ $gen->rewind(); // force run
 
 ?>
 --EXPECTF--
+Deprecated: Returning from a finally block is deprecated in %s on line %d
 before return
 before return in inner finally
 outer finally run

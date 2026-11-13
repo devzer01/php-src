@@ -7,12 +7,13 @@ set_error_handler(function($code, $message) {
 });
 
 $x= null;
-var_dump($x->method());
+try {
+    var_dump($x->method());
+} catch (Throwable $e) {
+  echo $e::class, ': ', $e->getCode(), ': ', $e->getMessage(), "\n";
+}
 echo "Alive\n";
 ?>
 --EXPECTF--
-
-int(4096)
-string(%d) "Call to a member function method() on null"
-NULL
+Error: 0: Call to a member function method() on null
 Alive

@@ -6,143 +6,146 @@ $frombase = array(2,8,10,16,36);
 $tobase = array(2,8,10,16,36);
 
 $values = array(10,
-				27,
-				39,
-				03,
-				0x5F,	
-				"10",
-				"27",
-				"39",
-				"5F", 
-				"3XYZ"
-				);	
+                27,
+                39,
+                03,
+                0x5F,
+                "10",
+                "27",
+                "39",
+                "5F",
+                "3XYZ"
+                );
 
 for ($f= 0; $f < count($frombase); $f++) {
-	echo "\n...from base is ", $frombase[$f], "\n";
-	for ($t= 0; $t < count($tobase); $t++) {
-		echo "......to base is ", $tobase[$t], "\n";	
-		for ($i =0; $i < count($values); $i++){ 	
-			$res = base_convert($values[$i],$frombase[$f],$tobase[$t]);
-			echo ".........value= ", $values[$i], " res = ", $res, "\n";
-		}		
-	}	
+    echo "\n...from base is ", $frombase[$f], "\n";
+    for ($t= 0; $t < count($tobase); $t++) {
+        echo "......to base is ", $tobase[$t], "\n";
+        for ($i =0; $i < count($values); $i++){
+            try {
+                $res = base_convert($values[$i],$frombase[$f],$tobase[$t]);
+                echo ".........value= ", $values[$i], " res = ", $res, "\n";
+            } catch (Exception $e) {
+                echo "E........exc= ", $e::class, ': ', $e->getMessage(), "\n";
+            }
+        }
+    }
 }
 ?>
-
---EXPECTF--
+--EXPECT--
 ...from base is 2
 ......to base is 2
 .........value= 10 res = 10
-.........value= 27 res = 0
-.........value= 39 res = 0
-.........value= 3 res = 0
-.........value= 95 res = 0
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
 .........value= 10 res = 10
-.........value= 27 res = 0
-.........value= 39 res = 0
-.........value= 5F res = 0
-.........value= 3XYZ res = 0
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
 ......to base is 8
 .........value= 10 res = 2
-.........value= 27 res = 0
-.........value= 39 res = 0
-.........value= 3 res = 0
-.........value= 95 res = 0
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
 .........value= 10 res = 2
-.........value= 27 res = 0
-.........value= 39 res = 0
-.........value= 5F res = 0
-.........value= 3XYZ res = 0
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
 ......to base is 10
 .........value= 10 res = 2
-.........value= 27 res = 0
-.........value= 39 res = 0
-.........value= 3 res = 0
-.........value= 95 res = 0
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
 .........value= 10 res = 2
-.........value= 27 res = 0
-.........value= 39 res = 0
-.........value= 5F res = 0
-.........value= 3XYZ res = 0
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
 ......to base is 16
 .........value= 10 res = 2
-.........value= 27 res = 0
-.........value= 39 res = 0
-.........value= 3 res = 0
-.........value= 95 res = 0
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
 .........value= 10 res = 2
-.........value= 27 res = 0
-.........value= 39 res = 0
-.........value= 5F res = 0
-.........value= 3XYZ res = 0
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
 ......to base is 36
 .........value= 10 res = 2
-.........value= 27 res = 0
-.........value= 39 res = 0
-.........value= 3 res = 0
-.........value= 95 res = 0
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
 .........value= 10 res = 2
-.........value= 27 res = 0
-.........value= 39 res = 0
-.........value= 5F res = 0
-.........value= 3XYZ res = 0
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
 
 ...from base is 8
 ......to base is 2
 .........value= 10 res = 1000
 .........value= 27 res = 10111
-.........value= 39 res = 11
+E........exc= Exception: Invalid characters passed for attempted conversion
 .........value= 3 res = 11
-.........value= 95 res = 101
+E........exc= Exception: Invalid characters passed for attempted conversion
 .........value= 10 res = 1000
 .........value= 27 res = 10111
-.........value= 39 res = 11
-.........value= 5F res = 101
-.........value= 3XYZ res = 11
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
 ......to base is 8
 .........value= 10 res = 10
 .........value= 27 res = 27
-.........value= 39 res = 3
+E........exc= Exception: Invalid characters passed for attempted conversion
 .........value= 3 res = 3
-.........value= 95 res = 5
+E........exc= Exception: Invalid characters passed for attempted conversion
 .........value= 10 res = 10
 .........value= 27 res = 27
-.........value= 39 res = 3
-.........value= 5F res = 5
-.........value= 3XYZ res = 3
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
 ......to base is 10
 .........value= 10 res = 8
 .........value= 27 res = 23
-.........value= 39 res = 3
+E........exc= Exception: Invalid characters passed for attempted conversion
 .........value= 3 res = 3
-.........value= 95 res = 5
+E........exc= Exception: Invalid characters passed for attempted conversion
 .........value= 10 res = 8
 .........value= 27 res = 23
-.........value= 39 res = 3
-.........value= 5F res = 5
-.........value= 3XYZ res = 3
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
 ......to base is 16
 .........value= 10 res = 8
 .........value= 27 res = 17
-.........value= 39 res = 3
+E........exc= Exception: Invalid characters passed for attempted conversion
 .........value= 3 res = 3
-.........value= 95 res = 5
+E........exc= Exception: Invalid characters passed for attempted conversion
 .........value= 10 res = 8
 .........value= 27 res = 17
-.........value= 39 res = 3
-.........value= 5F res = 5
-.........value= 3XYZ res = 3
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
 ......to base is 36
 .........value= 10 res = 8
 .........value= 27 res = n
-.........value= 39 res = 3
+E........exc= Exception: Invalid characters passed for attempted conversion
 .........value= 3 res = 3
-.........value= 95 res = 5
+E........exc= Exception: Invalid characters passed for attempted conversion
 .........value= 10 res = 8
 .........value= 27 res = n
-.........value= 39 res = 3
-.........value= 5F res = 5
-.........value= 3XYZ res = 3
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
 
 ...from base is 10
 ......to base is 2
@@ -154,8 +157,8 @@ for ($f= 0; $f < count($frombase); $f++) {
 .........value= 10 res = 1010
 .........value= 27 res = 11011
 .........value= 39 res = 100111
-.........value= 5F res = 101
-.........value= 3XYZ res = 11
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
 ......to base is 8
 .........value= 10 res = 12
 .........value= 27 res = 33
@@ -165,8 +168,8 @@ for ($f= 0; $f < count($frombase); $f++) {
 .........value= 10 res = 12
 .........value= 27 res = 33
 .........value= 39 res = 47
-.........value= 5F res = 5
-.........value= 3XYZ res = 3
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
 ......to base is 10
 .........value= 10 res = 10
 .........value= 27 res = 27
@@ -176,8 +179,8 @@ for ($f= 0; $f < count($frombase); $f++) {
 .........value= 10 res = 10
 .........value= 27 res = 27
 .........value= 39 res = 39
-.........value= 5F res = 5
-.........value= 3XYZ res = 3
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
 ......to base is 16
 .........value= 10 res = a
 .........value= 27 res = 1b
@@ -187,8 +190,8 @@ for ($f= 0; $f < count($frombase); $f++) {
 .........value= 10 res = a
 .........value= 27 res = 1b
 .........value= 39 res = 27
-.........value= 5F res = 5
-.........value= 3XYZ res = 3
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
 ......to base is 36
 .........value= 10 res = a
 .........value= 27 res = r
@@ -198,8 +201,8 @@ for ($f= 0; $f < count($frombase); $f++) {
 .........value= 10 res = a
 .........value= 27 res = r
 .........value= 39 res = 13
-.........value= 5F res = 5
-.........value= 3XYZ res = 3
+E........exc= Exception: Invalid characters passed for attempted conversion
+E........exc= Exception: Invalid characters passed for attempted conversion
 
 ...from base is 16
 ......to base is 2
@@ -212,7 +215,7 @@ for ($f= 0; $f < count($frombase); $f++) {
 .........value= 27 res = 100111
 .........value= 39 res = 111001
 .........value= 5F res = 1011111
-.........value= 3XYZ res = 11
+E........exc= Exception: Invalid characters passed for attempted conversion
 ......to base is 8
 .........value= 10 res = 20
 .........value= 27 res = 47
@@ -223,7 +226,7 @@ for ($f= 0; $f < count($frombase); $f++) {
 .........value= 27 res = 47
 .........value= 39 res = 71
 .........value= 5F res = 137
-.........value= 3XYZ res = 3
+E........exc= Exception: Invalid characters passed for attempted conversion
 ......to base is 10
 .........value= 10 res = 16
 .........value= 27 res = 39
@@ -234,7 +237,7 @@ for ($f= 0; $f < count($frombase); $f++) {
 .........value= 27 res = 39
 .........value= 39 res = 57
 .........value= 5F res = 95
-.........value= 3XYZ res = 3
+E........exc= Exception: Invalid characters passed for attempted conversion
 ......to base is 16
 .........value= 10 res = 10
 .........value= 27 res = 27
@@ -245,7 +248,7 @@ for ($f= 0; $f < count($frombase); $f++) {
 .........value= 27 res = 27
 .........value= 39 res = 39
 .........value= 5F res = 5f
-.........value= 3XYZ res = 3
+E........exc= Exception: Invalid characters passed for attempted conversion
 ......to base is 36
 .........value= 10 res = g
 .........value= 27 res = 13
@@ -256,7 +259,7 @@ for ($f= 0; $f < count($frombase); $f++) {
 .........value= 27 res = 13
 .........value= 39 res = 1l
 .........value= 5F res = 2n
-.........value= 3XYZ res = 3
+E........exc= Exception: Invalid characters passed for attempted conversion
 
 ...from base is 36
 ......to base is 2

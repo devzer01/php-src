@@ -7,10 +7,10 @@ TestFest London May 2009
 <?php
 $h = new SplMinHeap();
 try {
-	$h->top();
+    $h->top();
 } catch (Exception $e) {
-	echo $e->getMessage();
+    echo $e::class, ': ', $e->getMessage(), PHP_EOL;
 }
 ?>
---EXPECTF--
-Can't peek at an empty heap
+--EXPECT--
+RuntimeException: Can't peek at an empty heap

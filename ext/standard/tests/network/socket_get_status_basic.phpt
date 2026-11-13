@@ -17,7 +17,13 @@ fclose($server);
 
 ?>
 --EXPECTF--
-array(7) {
+array(8) {
+  ["timed_out"]=>
+  bool(false)
+  ["blocked"]=>
+  bool(true)
+  ["eof"]=>
+  bool(false)
   ["stream_type"]=>
   string(%d) "tcp_socket%S"
   ["mode"]=>
@@ -26,10 +32,6 @@ array(7) {
   int(0)
   ["seekable"]=>
   bool(false)
-  ["timed_out"]=>
-  bool(false)
-  ["blocked"]=>
-  bool(true)
-  ["eof"]=>
-  bool(false)
+  ["uri"]=>
+  string(21) "tcp://127.0.0.1:%d"
 }

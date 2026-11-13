@@ -1,17 +1,17 @@
 --TEST--
 SPL: RecursiveIteratorIterator - Exception thrown in callHasChildren which should be handled in next()
 --FILE--
-<?php 
+<?php
 
-$arr = array(1,2);
-$arrOb = new ArrayObject($arr);
-
-$recArrIt = new RecursiveArrayIterator($arrOb->getIterator());
+$recArrIt = new RecursiveArrayIterator([
+    [1, 2],
+    ['a', 'b'],
+]);
 
 class MyRecursiveIteratorIterator extends RecursiveIteratorIterator {
-    
-    function callHasChildren() {
-    	throw new Exception;
+
+    function callHasChildren(): bool {
+        throw new Exception;
     }
 }
 
@@ -28,7 +28,7 @@ var_dump($recItIt2->next());
 --EXPECTF--
 NULL
 
-Fatal error: Uncaught exception 'Exception' in %s
+Fatal error: Uncaught Exception in %s
 Stack trace:
 #0 [internal function]: MyRecursiveIteratorIterator->callHasChildren()
 #1 %s: RecursiveIteratorIterator->next()

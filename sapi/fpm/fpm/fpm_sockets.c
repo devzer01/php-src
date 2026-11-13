@@ -1,5 +1,3 @@
-
-	/* $Id: fpm_sockets.c,v 1.20.2.1 2008/12/13 03:21:18 anight Exp $ */
 	/* (c) 2007,2008 Andrei Nigmatulin */
 
 #include "fpm_config.h"
@@ -41,9 +39,27 @@ static struct fpm_array_s sockets_list;
 
 enum { FPM_GET_USE_SOCKET = 1, FPM_STORE_SOCKET = 2, FPM_STORE_USE_SOCKET = 3 };
 
+#ifdef SO_SETFIB
+static int routemax = -1;
+#endif
+
+static inline void fpm_sockets_get_env_name(char *envname, size_t envname_length, unsigned idx) /* {{{ */
+{
+	if (!idx) {
+		strcpy(envname, "FPM_SOCKETS");
+	} else {
+		snprintf(envname, envname_length, "FPM_SOCKETS_%d", idx);
+	}
+}
+/* }}} */
+
 static void fpm_sockets_cleanup(int which, void *arg) /* {{{ */
 {
 	unsigned i;
+	unsigned socket_set_count = 0;
+	unsigned socket_set[FPM_ENV_SOCKET_SET_MAX];
+	unsigned socket_set_buf = 0;
+	char envname[32];
 	char *env_value = 0;
 	int p = 0;
 	struct listening_socket_s *ls = sockets_list.data;
@@ -53,9 +69,29 @@ static void fpm_sockets_cleanup(int which, void *arg) /* {{{ */
 			close(ls->sock);
 		} else { /* on PARENT EXEC we want socket fds to be inherited through environment variable */
 			char fd[32];
-			sprintf(fd, "%d", ls->sock);
-			env_value = realloc(env_value, p + (p ? 1 : 0) + strlen(ls->key) + 1 + strlen(fd) + 1);
-			p += sprintf(env_value + p, "%s%s=%s", p ? "," : "", ls->key, fd);
+			char *tmpenv_value;
+			snprintf(fd, sizeof(fd), "%d", ls->sock);
+
+			socket_set_buf = (i % FPM_ENV_SOCKET_SET_SIZE == 0 && i) ? 1 : 0;
+			tmpenv_value = realloc(env_value, p + (p ? 1 : 0) + strlen(ls->key) + 1 + strlen(fd) + socket_set_buf + 1);
+			if (!tmpenv_value) {
+				zlog(ZLOG_SYSERROR, "failure to inherit data on parent exec for socket `%s` due to memory allocation failure", ls->key);
+				free(ls->key);
+				break;
+			}
+
+			env_value = tmpenv_value;
+
+			if (i % FPM_ENV_SOCKET_SET_SIZE == 0) {
+				socket_set[socket_set_count] = p + socket_set_buf;
+				socket_set_count++;
+				if (i) {
+					*(env_value + p + 1) = 0;
+				}
+			}
+
+			p += sprintf(env_value + p + socket_set_buf, "%s%s=%s", (p && !socket_set_buf) ? "," : "", ls->key, fd);
+			p += socket_set_buf;
 		}
 
 		if (which == FPM_CLEANUP_PARENT_EXIT_MAIN) {
@@ -67,7 +103,12 @@ static void fpm_sockets_cleanup(int which, void *arg) /* {{{ */
 	}
 
 	if (env_value) {
-		setenv("FPM_SOCKETS", env_value, 1);
+		for (i = 0; i < socket_set_count; i++) {
+			fpm_sockets_get_env_name(envname, sizeof(envname), i);
+			setenv(envname, env_value + socket_set[i], 1);
+		}
+		fpm_sockets_get_env_name(envname, sizeof(envname), socket_set_count);
+		unsetenv(envname);
 		free(env_value);
 	}
 
@@ -77,21 +118,21 @@ static void fpm_sockets_cleanup(int which, void *arg) /* {{{ */
 
 static void *fpm_get_in_addr(struct sockaddr *sa) /* {{{ */
 {
-    if (sa->sa_family == AF_INET) {
-        return &(((struct sockaddr_in*)sa)->sin_addr);
-    }
+	if (sa->sa_family == AF_INET) {
+		return &(((struct sockaddr_in*)sa)->sin_addr);
+	}
 
-    return &(((struct sockaddr_in6*)sa)->sin6_addr);
+	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 /* }}} */
 
 static int fpm_get_in_port(struct sockaddr *sa) /* {{{ */
 {
-    if (sa->sa_family == AF_INET) {
-        return ntohs(((struct sockaddr_in*)sa)->sin_port);
-    }
+	if (sa->sa_family == AF_INET) {
+		return ntohs(((struct sockaddr_in*)sa)->sin_port);
+	}
 
-    return ntohs(((struct sockaddr_in6*)sa)->sin6_port);
+	return ntohs(((struct sockaddr_in6*)sa)->sin6_port);
 }
 /* }}} */
 
@@ -102,7 +143,8 @@ static int fpm_sockets_hash_op(int sock, struct sockaddr *sa, char *key, int typ
 			case FPM_AF_INET : {
 				key = alloca(INET6_ADDRSTRLEN+10);
 				inet_ntop(sa->sa_family, fpm_get_in_addr(sa), key, INET6_ADDRSTRLEN);
-				sprintf(key+strlen(key), ":%d", fpm_get_in_port(sa));
+				size_t key_length = strlen(key);
+				snprintf(key + key_length, INET6_ADDRSTRLEN + 10 - key_length, ":%d", fpm_get_in_port(sa));
 				break;
 			}
 
@@ -179,7 +221,7 @@ static int fpm_sockets_new_listening_socket(struct fpm_worker_pool_s *wp, struct
 
 	if (wp->listen_address_domain == FPM_AF_UNIX) {
 		if (fpm_socket_unix_test_connect((struct sockaddr_un *)sa, socklen) == 0) {
-			zlog(ZLOG_ERROR, "An another FPM instance seems to already listen on %s", ((struct sockaddr_un *) sa)->sun_path);
+			zlog(ZLOG_ERROR, "Another FPM instance seems to already listen on %s", ((struct sockaddr_un *) sa)->sun_path);
 			close(sock);
 			return -1;
 		}
@@ -201,7 +243,7 @@ static int fpm_sockets_new_listening_socket(struct fpm_worker_pool_s *wp, struct
 
 		umask(saved_umask);
 
-		if (0 > fpm_unix_set_socket_premissions(wp, path)) {
+		if (0 > fpm_unix_set_socket_permissions(wp, path)) {
 			close(sock);
 			return -1;
 		}
@@ -212,6 +254,20 @@ static int fpm_sockets_new_listening_socket(struct fpm_worker_pool_s *wp, struct
 		close(sock);
 		return -1;
 	}
+
+#ifdef SO_SETFIB
+	if (-1 < wp->config->listen_setfib) {
+		if (routemax < wp->config->listen_setfib) {
+			zlog(ZLOG_ERROR, "Invalid routing table id %d, max is %d", wp->config->listen_setfib, routemax);
+			close(sock);
+			return -1;
+		}
+
+		if (0 > setsockopt(sock, SOL_SOCKET, SO_SETFIB, &wp->config->listen_setfib, sizeof(wp->config->listen_setfib))) {
+			zlog(ZLOG_WARNING, "failed to change socket SO_SETFIB attribute");
+		}
+	}
+#endif
 
 	return sock;
 }
@@ -246,48 +302,19 @@ enum fpm_address_domain fpm_sockets_domain_from_address(char *address) /* {{{ */
 }
 /* }}} */
 
-static int fpm_socket_af_inet_listening_socket(struct fpm_worker_pool_s *wp) /* {{{ */
+static int fpm_socket_af_inet_socket_by_addr(struct fpm_worker_pool_s *wp, const char *addr, const char *port) /* {{{ */
 {
 	struct addrinfo hints, *servinfo, *p;
-	char *dup_address = strdup(wp->config->listen_address);
-	char *port_str = strrchr(dup_address, ':');
-	char *addr = NULL;
 	char tmpbuf[INET6_ADDRSTRLEN];
-	int addr_len;
-	int port = 0;
-	int sock = -1;
 	int status;
-
-	if (port_str) { /* this is host:port pair */
-		*port_str++ = '\0';
-		port = atoi(port_str);
-		addr = dup_address;
-	} else if (strlen(dup_address) == strspn(dup_address, "0123456789")) { /* this is port */
-		port = atoi(dup_address);
-		port_str = dup_address;
-		/* IPv6 catch-all + IPv4-mapped */
-		addr = "::";
-	}
-
-	if (port == 0) {
-		zlog(ZLOG_ERROR, "invalid port value '%s'", port_str);
-		return -1;
-	}
-
-	/* strip brackets from address for getaddrinfo */
-	addr_len = strlen(addr);
-	if (addr[0] == '[' && addr[addr_len - 1] == ']') {
-		addr[addr_len - 1] = '\0';
-		addr++;
-	}
+	int sock = -1;
 
 	memset(&hints, 0, sizeof hints);
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
 
-	if ((status = getaddrinfo(addr, port_str, &hints, &servinfo)) != 0) {
-		zlog(ZLOG_ERROR, "getaddrinfo: %s\n", gai_strerror(status));
-		free(dup_address);
+	if ((status = getaddrinfo(addr, port, &hints, &servinfo)) != 0) {
+		zlog(ZLOG_ERROR, "getaddrinfo: %s", gai_strerror(status));
 		return -1;
 	}
 
@@ -302,8 +329,66 @@ static int fpm_socket_af_inet_listening_socket(struct fpm_worker_pool_s *wp) /* 
 		}
 	}
 
-	free(dup_address);
 	freeaddrinfo(servinfo);
+
+	return sock;
+}
+/* }}} */
+
+static int fpm_socket_af_inet_listening_socket(struct fpm_worker_pool_s *wp) /* {{{ */
+{
+	char *dup_address = strdup(wp->config->listen_address);
+	char *port_str = strrchr(dup_address, ':');
+	char *addr = NULL;
+	int addr_len;
+	int port = 0;
+	int sock = -1;
+
+	if (port_str) { /* this is host:port pair */
+		*port_str++ = '\0';
+		port = atoi(port_str);
+		addr = dup_address;
+
+		/* strip brackets from address for getaddrinfo */
+		addr_len = strlen(addr);
+		if (addr[0] == '[' && addr[addr_len - 1] == ']') {
+			addr[addr_len - 1] = '\0';
+			addr++;
+		}
+
+	} else if (strlen(dup_address) == strspn(dup_address, "0123456789")) { /* this is port */
+		port = atoi(dup_address);
+		port_str = dup_address;
+	}
+
+	if (port < 1 || port > 65535) {
+		zlog(ZLOG_ERROR, "invalid port value '%s'", port_str);
+		free(dup_address);
+		return -1;
+	}
+
+	if (addr) {
+		/* Bind a specific address */
+		sock = fpm_socket_af_inet_socket_by_addr(wp, addr, port_str);
+	} else {
+		/* Bind ANYADDR
+		 *
+		 * Try "::" first as that covers IPv6 ANYADDR and mapped IPv4 ANYADDR
+		 * silencing warnings since failure is an option
+		 *
+		 * If that fails (because AF_INET6 is unsupported) retry with 0.0.0.0
+		 */
+		int old_level = zlog_set_level(ZLOG_ALERT);
+		sock = fpm_socket_af_inet_socket_by_addr(wp, "::", port_str);
+		zlog_set_level(old_level);
+
+		if (sock < 0) {
+			zlog(ZLOG_NOTICE, "Failed implicitly binding to ::, retrying with 0.0.0.0");
+			sock = fpm_socket_af_inet_socket_by_addr(wp, "0.0.0.0", port_str);
+		}
+	}
+
+	free(dup_address);
 
 	return sock;
 }
@@ -312,48 +397,100 @@ static int fpm_socket_af_inet_listening_socket(struct fpm_worker_pool_s *wp) /* 
 static int fpm_socket_af_unix_listening_socket(struct fpm_worker_pool_s *wp) /* {{{ */
 {
 	struct sockaddr_un sa_un;
+    size_t socket_length = sizeof(sa_un.sun_path);
+    size_t address_length = strlen(wp->config->listen_address);
 
 	memset(&sa_un, 0, sizeof(sa_un));
-	strlcpy(sa_un.sun_path, wp->config->listen_address, sizeof(sa_un.sun_path));
+	strlcpy(sa_un.sun_path, wp->config->listen_address, socket_length);
+
+    if (address_length >= socket_length) {
+        zlog(
+            ZLOG_WARNING,
+            "[pool %s] cannot bind to UNIX socket '%s' as path is too long (found length: %zu, "
+				"maximal length: %zu), trying cut socket path instead '%s'",
+            wp->config->name,
+			wp->config->listen_address,
+			address_length,
+			socket_length,
+			sa_un.sun_path
+        );
+    }
+
 	sa_un.sun_family = AF_UNIX;
 	return fpm_sockets_get_listening_socket(wp, (struct sockaddr *) &sa_un, sizeof(struct sockaddr_un));
 }
 /* }}} */
 
-int fpm_sockets_init_main() /* {{{ */
+#ifdef SO_SETFIB
+static zend_result fpm_socket_setfib_init(void)
+{
+	/* potentially up to 65536 but needs to check the actual cap beforehand */
+	size_t len = sizeof(routemax);
+	if (sysctlbyname("net.fibs", &routemax, &len, NULL, 0) < 0) {
+		zlog(ZLOG_ERROR, "failed to get max routing table");
+		return FAILURE;
+	}
+
+	return SUCCESS;
+}
+#endif
+
+int fpm_sockets_init_main(void)
 {
 	unsigned i, lq_len;
 	struct fpm_worker_pool_s *wp;
-	char *inherited = getenv("FPM_SOCKETS");
+	char envname[32];
+	char sockpath[256];
+	char *inherited;
 	struct listening_socket_s *ls;
 
 	if (0 == fpm_array_init(&sockets_list, sizeof(struct listening_socket_s), 10)) {
 		return -1;
 	}
 
+#ifdef SO_SETFIB
+	if (fpm_socket_setfib_init() == FAILURE) {
+		return -1;
+	}
+#endif
+
 	/* import inherited sockets */
-	while (inherited && *inherited) {
-		char *comma = strchr(inherited, ',');
-		int type, fd_no;
-		char *eq;
-
-		if (comma) {
-			*comma = '\0';
+	for (i = 0; i < FPM_ENV_SOCKET_SET_MAX; i++) {
+		fpm_sockets_get_env_name(envname, sizeof(envname), i);
+		inherited = getenv(envname);
+		if (!inherited) {
+			break;
 		}
 
-		eq = strchr(inherited, '=');
-		if (eq) {
-			*eq = '\0';
-			fd_no = atoi(eq + 1);
-			type = fpm_sockets_domain_from_address(inherited);
-			zlog(ZLOG_NOTICE, "using inherited socket fd=%d, \"%s\"", fd_no, inherited);
-			fpm_sockets_hash_op(fd_no, 0, inherited, type, FPM_STORE_SOCKET);
-		}
+		while (inherited && *inherited) {
+			char *comma = strchr(inherited, ',');
+			int type, fd_no;
+			char *eq;
 
-		if (comma) {
-			inherited = comma + 1;
-		} else {
-			inherited = 0;
+			if (comma) {
+				*comma = '\0';
+			}
+
+			eq = strchr(inherited, '=');
+			if (eq) {
+				int sockpath_len = eq - inherited;
+				if (sockpath_len > 255) {
+					/* this should never happen as UDS limit is lower */
+					sockpath_len = 255;
+				}
+				memcpy(sockpath, inherited, sockpath_len);
+				sockpath[sockpath_len] = '\0';
+				fd_no = atoi(eq + 1);
+				type = fpm_sockets_domain_from_address(sockpath);
+				zlog(ZLOG_NOTICE, "using inherited socket fd=%d, \"%s\"", fd_no, sockpath);
+				fpm_sockets_hash_op(fd_no, 0, sockpath, type, FPM_STORE_SOCKET);
+			}
+
+			if (comma) {
+				inherited = comma + 1;
+			} else {
+				inherited = 0;
+			}
 		}
 	}
 
@@ -365,7 +502,7 @@ int fpm_sockets_init_main() /* {{{ */
 				break;
 
 			case FPM_AF_UNIX :
-				if (0 > fpm_unix_resolve_socket_premissions(wp)) {
+				if (0 > fpm_unix_resolve_socket_permissions(wp)) {
 					return -1;
 				}
 				wp->listening_socket = fpm_socket_af_unix_listening_socket(wp);
@@ -377,7 +514,7 @@ int fpm_sockets_init_main() /* {{{ */
 		}
 
 	if (wp->listen_address_domain == FPM_AF_INET && fpm_socket_get_listening_queue(wp->listening_socket, NULL, &lq_len) >= 0) {
-			fpm_scoreboard_update(-1, -1, -1, (int)lq_len, -1, -1, 0, FPM_SCOREBOARD_ACTION_SET, wp->scoreboard);
+			fpm_scoreboard_update(-1, -1, -1, (int)lq_len, -1, -1, 0, 0, FPM_SCOREBOARD_ACTION_SET, wp->scoreboard);
 		}
 	}
 
@@ -403,7 +540,6 @@ int fpm_sockets_init_main() /* {{{ */
 	}
 	return 0;
 }
-/* }}} */
 
 #if HAVE_FPM_LQ
 
@@ -420,7 +556,7 @@ int fpm_socket_get_listening_queue(int sock, unsigned *cur_lq, unsigned *max_lq)
 		zlog(ZLOG_SYSERROR, "failed to retrieve TCP_INFO for socket");
 		return -1;
 	}
-#if defined(__FreeBSD__)
+#if defined(__FreeBSD__) || defined(__NetBSD__)
 	if (info.__tcpi_sacked == 0) {
 		return -1;
 	}
@@ -450,9 +586,32 @@ int fpm_socket_get_listening_queue(int sock, unsigned *cur_lq, unsigned *max_lq)
 	return 0;
 }
 
-#endif
+#elif defined(HAVE_LQ_TCP_CONNECTION_INFO)
 
-#ifdef HAVE_LQ_SO_LISTENQ
+#include <netinet/tcp.h>
+
+int fpm_socket_get_listening_queue(int sock, unsigned *cur_lq, unsigned *max_lq)
+{
+	struct tcp_connection_info info;
+	socklen_t len = sizeof(info);
+
+	if (0 > getsockopt(sock, IPPROTO_TCP, TCP_CONNECTION_INFO, &info, &len)) {
+		zlog(ZLOG_SYSERROR, "failed to retrieve TCP_CONNECTION_INFO for socket");
+		return -1;
+	}
+
+	if (cur_lq) {
+		*cur_lq = info.tcpi_tfo_syn_data_acked;
+	}
+
+	if (max_lq) {
+		*max_lq = 0;
+	}
+
+	return 0;
+}
+
+#elif defined(HAVE_LQ_SO_LISTENQ)
 
 int fpm_socket_get_listening_queue(int sock, unsigned *cur_lq, unsigned *max_lq)
 {
